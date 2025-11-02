@@ -1,0 +1,2062 @@
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->rememberToken();
+            $table->timestamps();
+        });
+
+        Schema::create('password_reset_tokens', function (Blueprint $table) {
+            $table->string('email')->primary();
+            $table->string('token');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('sessions', function (Blueprint $table) {
+            $table->string('id')->primary();
+            $table->foreignId('user_id')->nullable()->index();
+            $table->string('ip_address', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->longText('payload');
+            $table->integer('last_activity')->index();
+        });
+    }
+
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->text('two_factor_secret')->after('password')->nullable();
+            $table->text('two_factor_recovery_codes')->after('two_factor_secret')->nullable();
+            $table->timestamp('two_factor_confirmed_at')->after('two_factor_recovery_codes')->nullable();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn([
+                'two_factor_secret',
+                'two_factor_recovery_codes',
+                'two_factor_confirmed_at',
+            ]);
+        });
+    }
+};
+
+public function up(): void
+    {
+        Schema::create('tenants', function (Blueprint $table) {
+            $table->id();
+            $table->string('name'); // Shop/Company Name
+            $table->string('slug')->unique(); // URL slug for subdomain
+            $table->string('domain')->nullable(); // Custom domain
+            $table->string('email')->nullable();
+            $table->string('phone')->nullable();
+            $table->text('address')->nullable();
+            $table->string('logo')->nullable();
+            $table->json('settings')->nullable(); // Store shop specific settings
+            $table->string('subscription_plan')->default('basic'); // basic, premium, enterprise
+            $table->timestamp('subscription_expires_at')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+    }
+
+public function up(): void
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->foreignId('tenant_id')->nullable()->constrained()->onDelete('cascade');
+            $table->string('role')->default('cashier'); // admin, manager, cashier
+            $table->boolean('is_active')->default(true);
+            $table->timestamp('last_login_at')->nullable();
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('product_categories', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name');
+            $table->string('description')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'is_active']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('category_id')->nullable()->constrained('product_categories')->onDelete('set null');
+            $table->string('name');
+            $table->string('code')->nullable(); // Product SKU/Code
+            $table->text('description')->nullable();
+            $table->string('unit')->default('pcs'); // pcs, kg, ltr, etc.
+            $table->decimal('sale_price', 10, 2)->default(0);
+            $table->json('images')->nullable(); // Array of image paths
+            $table->integer('low_stock_alert')->default(10);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->unique(['tenant_id', 'code']);
+            $table->index(['tenant_id', 'category_id']);
+            $table->index(['tenant_id', 'is_active']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('stock_entries', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->enum('type', ['opening', 'purchase', 'sale', 'adjustment']); // Type of stock movement
+            $table->decimal('quantity', 10, 2); // Can be negative for outgoing
+            $table->decimal('purchase_price', 10, 2)->nullable(); // For purchases and opening stock
+            $table->decimal('sale_price', 10, 2)->nullable(); // For sales
+            $table->date('entry_date');
+            $table->foreignId('reference_id')->nullable(); // Link to purchase_id, sale_id, etc.
+            $table->string('reference_type')->nullable(); // purchase, sale, adjustment
+            $table->text('notes')->nullable();
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'product_id']);
+            $table->index(['tenant_id', 'entry_date']);
+            $table->index(['reference_type', 'reference_id']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('stock_summary', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->decimal('total_qty', 12, 2)->default(0); // Current stock
+            $table->decimal('avg_purchase_price', 10, 2)->default(0); // Weighted average price
+            $table->decimal('total_value', 12, 2)->default(0); // total_qty * avg_purchase_price
+            $table->timestamp('last_updated_at')->useCurrent();
+            $table->timestamps();
+
+            $table->unique(['tenant_id', 'product_id']);
+            $table->index(['tenant_id', 'total_qty']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('vendors', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name');
+            $table->string('company_name')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
+            $table->text('address')->nullable();
+            $table->decimal('opening_due', 12, 2)->default(0); // Opening balance due
+            $table->decimal('current_due', 12, 2)->default(0); // Current due amount
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'is_active']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('purchases', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('vendor_id')->constrained()->onDelete('restrict');
+            $table->string('invoice_number')->nullable();
+            $table->date('purchase_date');
+            $table->decimal('subtotal', 12, 2)->default(0);
+            $table->decimal('discount', 10, 2)->default(0);
+            $table->decimal('total', 12, 2); // After discount
+            $table->decimal('paid', 12, 2)->default(0);
+            $table->decimal('due', 12, 2)->default(0); // total - paid
+            $table->enum('status', ['pending', 'completed', 'returned'])->default('completed');
+            $table->text('notes')->nullable();
+            $table->foreignId('created_by')->constrained('users');
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'vendor_id']);
+            $table->index(['tenant_id', 'purchase_date']);
+            $table->index(['tenant_id', 'status']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('purchase_items', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('purchase_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_id')->constrained()->onDelete('restrict');
+            $table->decimal('quantity', 10, 2);
+            $table->decimal('unit_price', 10, 2);
+            $table->decimal('total', 12, 2); // quantity * unit_price
+            $table->timestamps();
+
+            $table->index(['purchase_id', 'product_id']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('customers', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name');
+            $table->string('phone')->nullable();
+            $table->string('email')->nullable();
+            $table->text('address')->nullable();
+            $table->decimal('opening_due', 12, 2)->default(0); // Opening balance due
+            $table->decimal('current_due', 12, 2)->default(0); // Current due amount
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'is_active']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('sales', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('customer_id')->nullable()->constrained()->onDelete('set null');
+            $table->string('invoice_number')->unique();
+            $table->date('sale_date');
+            $table->decimal('subtotal', 12, 2);
+            $table->decimal('discount', 10, 2)->default(0);
+            $table->enum('discount_type', ['fixed', 'percentage'])->default('fixed');
+            $table->decimal('total', 12, 2); // After discount
+            $table->decimal('paid', 12, 2)->default(0);
+            $table->decimal('due', 12, 2)->default(0); // total - paid
+            $table->enum('payment_method', ['cash', 'card', 'mobile', 'bank'])->default('cash');
+            $table->text('notes')->nullable();
+            $table->foreignId('created_by')->constrained('users');
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'customer_id']);
+            $table->index(['tenant_id', 'sale_date']);
+            $table->index(['tenant_id', 'invoice_number']);
+        });
+    }
+
+ public function up(): void
+    {
+        Schema::create('sale_items', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('sale_id')->constrained()->onDelete('cascade');
+            $table->foreignId('product_id')->constrained()->onDelete('restrict');
+            $table->decimal('quantity', 10, 2);
+            $table->decimal('unit_price', 10, 2);
+            $table->decimal('total', 12, 2); // quantity * unit_price
+            $table->timestamps();
+
+            $table->index(['sale_id', 'product_id']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('accounts', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name');
+            $table->string('code')->nullable(); // Account code like 1001, 2001, etc.
+            $table->enum('type', ['asset', 'liability', 'equity', 'income', 'expense']);
+            $table->enum('sub_type', [
+                'cash', 'bank', 'receivable', 'inventory', 'fixed_asset',
+                'payable', 'loan', 'capital', 'sales', 'purchase', 'operating_expense'
+            ])->nullable();
+            $table->decimal('opening_balance', 12, 2)->default(0);
+            $table->decimal('current_balance', 12, 2)->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->unique(['tenant_id', 'code']);
+            $table->index(['tenant_id', 'type']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->foreignId('account_id')->constrained()->onDelete('restrict');
+            $table->date('transaction_date');
+            $table->decimal('debit', 12, 2)->default(0);
+            $table->decimal('credit', 12, 2)->default(0);
+            $table->string('description');
+            $table->enum('type', ['sale', 'purchase', 'expense', 'fund', 'payment', 'receipt', 'adjustment']);
+            $table->foreignId('reference_id')->nullable(); // Link to sale_id, purchase_id, etc.
+            $table->string('reference_type')->nullable(); // sale, purchase, expense, etc.
+            $table->foreignId('created_by')->constrained('users');
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'account_id']);
+            $table->index(['tenant_id', 'transaction_date']);
+            $table->index(['reference_type', 'reference_id']);
+        });
+    }
+
+public function up(): void
+    {
+        Schema::create('bank_accounts', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name'); // Account name
+            $table->string('bank_name');
+            $table->string('account_number')->nullable();
+            $table->string('branch')->nullable();
+            $table->decimal('opening_balance', 12, 2)->default(0);
+            $table->decimal('current_balance', 12, 2)->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'is_active']);
+        });
+    }|
+
+ public function up(): void
+    {
+        Schema::create('bank_transactions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('bank_account_id')->constrained()->onDelete('restrict');
+            $table->date('transaction_date');
+            $table->enum('type', ['deposit', 'withdrawal']);
+            $table->enum('category', ['fund', 'sale_receive', 'others', 'refund', 'purchase', 'expense']);
+            $table->decimal('amount', 12, 2);
+            $table->decimal('balance_after', 12, 2); // Running balance
+            $table->string('description');
+            $table->foreignId('reference_id')->nullable(); // Link to sale_id, purchase_id, etc.
+            $table->string('reference_type')->nullable();
+            $table->foreignId('created_by')->constrained('users');
+            $table->timestamps();
+
+            $table->index(['bank_account_id', 'transaction_date']);
+            $table->index(['reference_type', 'reference_id']);
+        });
+    }
+
+ public function up(): void
+    {
+        Schema::create('fixed_assets', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->date('purchase_date');
+            $table->decimal('cost', 12, 2); // Original purchase cost
+            $table->decimal('depreciation_rate', 5, 2)->default(0); // Annual depreciation %
+            $table->decimal('accumulated_depreciation', 12, 2)->default(0);
+            $table->decimal('current_value', 12, 2); // cost - accumulated_depreciation
+            $table->enum('status', ['active', 'disposed', 'sold'])->default('active');
+            $table->timestamps();
+
+            $table->index(['tenant_id', 'status']);
+        });
+    }
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Account extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'name',
+        'code',
+        'type',
+        'sub_type',
+        'opening_balance',
+        'current_balance',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'opening_balance' => 'decimal:2',
+        'current_balance' => 'decimal:2',
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    // Get account balance
+    public function getBalance(): float
+    {
+        return (float) $this->current_balance;
+    }
+
+    // Update current balance
+    public function updateBalance(float $amount): void
+    {
+        $this->increment('current_balance', $amount);
+    }
+
+    // Scope for active accounts
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    // Scope for accounts by type
+    public function scopeByType($query, string $type)
+    {
+        return $query->where('type', $type);
+    }
+
+    // Scope for accounts by sub type
+    public function scopeBySubType($query, string $subType)
+    {
+        return $query->where('sub_type', $subType);
+    }
+
+    // Create default chart of accounts for a tenant
+    public static function createDefaultChartOfAccounts(int $tenantId): void
+    {
+        $accounts = [
+            // Assets
+            ['code' => '1110', 'name' => 'Cash and Cash Equivalents', 'type' => 'asset', 'sub_type' => 'cash'],
+            ['code' => '1120', 'name' => 'Accounts Receivable', 'type' => 'asset', 'sub_type' => 'receivable'],
+            ['code' => '1130', 'name' => 'Inventory', 'type' => 'asset', 'sub_type' => 'inventory'],
+            ['code' => '1200', 'name' => 'Fixed Assets', 'type' => 'asset', 'sub_type' => 'fixed_asset'],
+
+            // Liabilities
+            ['code' => '2110', 'name' => 'Accounts Payable', 'type' => 'liability', 'sub_type' => 'payable'],
+            ['code' => '2120', 'name' => 'Taxes Payable', 'type' => 'liability', 'sub_type' => 'payable'],
+
+            // Equity
+            ['code' => '3100', 'name' => 'Owner\'s Equity', 'type' => 'equity', 'sub_type' => 'capital'],
+
+            // Income
+            ['code' => '4100', 'name' => 'Sales Revenue', 'type' => 'income', 'sub_type' => 'sales'],
+
+            // Expenses
+            ['code' => '5100', 'name' => 'Cost of Goods Sold', 'type' => 'expense', 'sub_type' => 'purchase'],
+            ['code' => '5200', 'name' => 'Operating Expenses', 'type' => 'expense', 'sub_type' => 'operating_expense'],
+        ];
+
+        foreach ($accounts as $account) {
+            static::create([
+                'tenant_id' => $tenantId,
+                'code' => $account['code'],
+                'name' => $account['name'],
+                'type' => $account['type'],
+                'sub_type' => $account['sub_type'],
+                'opening_balance' => 0,
+                'current_balance' => 0,
+                'is_active' => true,
+            ]);
+        }
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class BankAccount extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'account_id',
+        'name',
+        'bank_name',
+        'account_number',
+        'account_type',
+        'routing_number',
+        'opening_balance',
+        'current_balance',
+        'is_active',
+        'notes',
+    ];
+
+    protected $casts = [
+        'opening_balance' => 'decimal:2',
+        'current_balance' => 'decimal:2',
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    public function bankTransactions(): HasMany
+    {
+        return $this->hasMany(BankTransaction::class);
+    }
+
+    // Update balance after a transaction
+    public function updateBalance(): void
+    {
+        $totalDeposits = $this->bankTransactions()
+            ->where('type', 'deposit')
+            ->sum('amount');
+
+        $totalWithdrawals = $this->bankTransactions()
+            ->where('type', 'withdrawal')
+            ->sum('amount');
+
+        $this->update([
+            'current_balance' => $this->opening_balance + $totalDeposits - $totalWithdrawals
+        ]);
+    }
+
+    // Get balance for a specific date
+    public function getBalanceAsOf(string $date): float
+    {
+        $deposits = $this->bankTransactions()
+            ->where('type', 'deposit')
+            ->where('transaction_date', '<=', $date)
+            ->sum('amount');
+
+        $withdrawals = $this->bankTransactions()
+            ->where('type', 'withdrawal')
+            ->where('transaction_date', '<=', $date)
+            ->sum('amount');
+
+        return (float)$this->opening_balance + $deposits - $withdrawals;
+    }
+
+    // Check if account has sufficient balance
+    public function hasSufficientBalance(float $amount): bool
+    {
+        return $this->current_balance >= $amount;
+    }
+
+    // Get recent transactions
+    public function getRecentTransactions(int $limit = 10)
+    {
+        return $this->bankTransactions()
+            ->latest('transaction_date')
+            ->latest('created_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    // Scope for active accounts
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    // Scope by account type
+    public function scopeByType($query, string $type)
+    {
+        return $query->where('account_type', $type);
+    }
+}
+
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
+
+class BankTransaction extends Model
+{
+    protected $fillable = [
+        'bank_account_id',
+        'transaction_date',
+        'type',
+        'category',
+        'amount',
+        'balance_after',
+        'description',
+        'reference_id',
+        'reference_type',
+        'created_by',
+    ];
+
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'balance_after' => 'decimal:2',
+        'transaction_date' => 'date',
+    ];
+
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // Create a deposit transaction
+    public static function createDeposit(
+        BankAccount $bankAccount,
+        float $amount,
+        string $description,
+        string $category = 'fund',
+        ?int $referenceId = null,
+        ?string $referenceType = null,
+        ?string $date = null,
+        ?int $createdBy = null
+    ): self {
+        return DB::transaction(function () use ($bankAccount, $amount, $description, $category, $referenceId, $referenceType, $date, $createdBy) {
+            // Calculate balance after transaction
+            $balanceAfter = $bankAccount->current_balance + $amount;
+
+            $bankTransaction = self::create([
+                'bank_account_id' => $bankAccount->id,
+                'type' => 'deposit',
+                'category' => $category,
+                'amount' => $amount,
+                'balance_after' => $balanceAfter,
+                'transaction_date' => $date ?? now()->toDateString(),
+                'description' => $description,
+                'reference_id' => $referenceId,
+                'reference_type' => $referenceType,
+                'created_by' => $createdBy ?? 1,
+            ]);
+
+            $bankAccount->updateBalance();
+
+            return $bankTransaction;
+        });
+    }
+
+    // Create a withdrawal transaction
+    public static function createWithdrawal(
+        BankAccount $bankAccount,
+        float $amount,
+        string $description,
+        string $category = 'expense',
+        ?int $referenceId = null,
+        ?string $referenceType = null,
+        ?string $date = null,
+        ?int $createdBy = null
+    ): self {
+        return DB::transaction(function () use ($bankAccount, $amount, $description, $category, $referenceId, $referenceType, $date, $createdBy) {
+            // Check if sufficient balance exists
+            if (!$bankAccount->hasSufficientBalance($amount)) {
+                throw new \InvalidArgumentException('Insufficient bank account balance');
+            }
+
+            // Calculate balance after transaction
+            $balanceAfter = $bankAccount->current_balance - $amount;
+
+            $bankTransaction = self::create([
+                'bank_account_id' => $bankAccount->id,
+                'type' => 'withdrawal',
+                'category' => $category,
+                'amount' => $amount,
+                'balance_after' => $balanceAfter,
+                'transaction_date' => $date ?? now()->toDateString(),
+                'description' => $description,
+                'reference_id' => $referenceId,
+                'reference_type' => $referenceType,
+                'created_by' => $createdBy ?? 1,
+            ]);
+
+            $bankAccount->updateBalance();
+
+            return $bankTransaction;
+        });
+    }
+
+    // Scope for deposits
+    public function scopeDeposits($query)
+    {
+        return $query->where('type', 'deposit');
+    }
+
+    // Scope for withdrawals
+    public function scopeWithdrawals($query)
+    {
+        return $query->where('type', 'withdrawal');
+    }
+
+    // Scope for date range
+    public function scopeDateRange($query, string $startDate, string $endDate)
+    {
+        return $query->whereBetween('transaction_date', [$startDate, $endDate]);
+    }
+
+    // Scope for specific category
+    public function scopeByCategory($query, string $category)
+    {
+        return $query->where('category', $category);
+    }
+
+    // Get formatted amount with type indicator
+    public function getFormattedAmountAttribute(): string
+    {
+        $prefix = $this->type === 'deposit' ? '+' : '-';
+        return $prefix . number_format((float)$this->amount, 2);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Customer extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'name',
+        'phone',
+        'email',
+        'address',
+        'opening_due',
+        'current_due',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'opening_due' => 'decimal:2',
+        'current_due' => 'decimal:2',
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
+
+    // Calculate total amount due (opening + current)
+    public function getTotalDue(): float
+    {
+        return $this->opening_due + $this->current_due;
+    }
+
+    // Update current due amount
+    public function updateDue(float $amount): void
+    {
+        $this->increment('current_due', $amount);
+    }
+
+    // Payment received - reduce due amount
+    public function receivePayment(float $amount): void
+    {
+        $this->decrement('current_due', $amount);
+    }
+
+    // Calculate total sales amount
+    public function getTotalSalesAmount(): float
+    {
+        return $this->sales()->where('status', 'completed')->sum('total');
+    }
+
+    // Calculate total outstanding amount
+    public function getTotalOutstanding(): float
+    {
+        return $this->sales()->where('due', '>', 0)->sum('due');
+    }
+
+    // Get recent sales
+    public function getRecentSales(int $limit = 10)
+    {
+        return $this->sales()
+            ->latest('sale_date')
+            ->limit($limit)
+            ->get();
+    }
+
+    // Scope for active customers
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    // Scope for customers with outstanding balance
+    public function scopeWithOutstanding($query)
+    {
+        return $query->where('current_due', '>', 0);
+    }
+
+    // Search customers
+    public function scopeSearch($query, $search)
+    {
+        return $query->where(function ($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%")
+              ->orWhere('phone', 'like', "%{$search}%");
+        });
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+
+class FixedAsset extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'name',
+        'description',
+        'purchase_date',
+        'cost',
+        'depreciation_rate',
+        'accumulated_depreciation',
+        'current_value',
+        'status',
+    ];
+
+    protected $casts = [
+        'purchase_date' => 'date',
+        'cost' => 'decimal:2',
+        'depreciation_rate' => 'decimal:2',
+        'accumulated_depreciation' => 'decimal:2',
+        'current_value' => 'decimal:2',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    // Calculate annual depreciation amount
+    public function getAnnualDepreciationAmount(): float
+    {
+        return ($this->cost * $this->depreciation_rate) / 100;
+    }
+
+    // Calculate monthly depreciation amount
+    public function getMonthlyDepreciationAmount(): float
+    {
+        return $this->getAnnualDepreciationAmount() / 12;
+    }
+
+    // Calculate current book value
+    public function getBookValue(): float
+    {
+        return $this->cost - $this->accumulated_depreciation;
+    }
+
+    // Update depreciation for a given period
+    public function updateDepreciation(int $months = 1): void
+    {
+        $monthlyDepreciation = $this->getMonthlyDepreciationAmount();
+        $totalDepreciation = $monthlyDepreciation * $months;
+
+        $newAccumulatedDepreciation = min(
+            $this->accumulated_depreciation + $totalDepreciation,
+            $this->cost // Cannot depreciate more than original cost
+        );
+
+        $this->update([
+            'accumulated_depreciation' => $newAccumulatedDepreciation,
+            'current_value' => $this->cost - $newAccumulatedDepreciation,
+        ]);
+    }
+
+    // Check if asset is fully depreciated
+    public function isFullyDepreciated(): bool
+    {
+        return $this->accumulated_depreciation >= $this->cost;
+    }
+
+    // Get years of ownership
+    public function getYearsOfOwnership(): float
+    {
+        return Carbon::parse($this->purchase_date)->diffInMonths(now()) / 12;
+    }
+
+    // Dispose the asset
+    public function dispose(): void
+    {
+        $this->update(['status' => 'disposed']);
+    }
+
+    // Sell the asset
+    public function sell(): void
+    {
+        $this->update(['status' => 'sold']);
+    }
+
+    // Scope for active assets
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    // Scope for disposed assets
+    public function scopeDisposed($query)
+    {
+        return $query->where('status', 'disposed');
+    }
+
+    // Scope for sold assets
+    public function scopeSold($query)
+    {
+        return $query->where('status', 'sold');
+    }
+
+    // Scope for assets needing depreciation update
+    public function scopeNeedingDepreciation($query)
+    {
+        return $query->where('status', 'active')
+                    ->where('accumulated_depreciation', '<', DB::raw('cost'));
+    }
+
+    // Get status badge color
+    public function getStatusColor(): string
+    {
+        return match($this->status) {
+            'active' => 'success',
+            'disposed' => 'warning',
+            'sold' => 'info',
+            default => 'secondary'
+        };
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
+class Product extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'category_id',
+        'name',
+        'code',
+        'description',
+        'unit',
+        'sale_price',
+        'images',
+        'low_stock_alert',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'sale_price' => 'decimal:2',
+        'images' => 'array',
+        'low_stock_alert' => 'integer',
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ProductCategory::class, 'category_id');
+    }
+
+    public function stockEntries(): HasMany
+    {
+        return $this->hasMany(StockEntry::class);
+    }
+
+    public function stockSummary(): HasOne
+    {
+        return $this->hasOne(StockSummary::class);
+    }
+
+    public function purchaseItems(): HasMany
+    {
+        return $this->hasMany(PurchaseItem::class);
+    }
+
+    public function saleItems(): HasMany
+    {
+        return $this->hasMany(SaleItem::class);
+    }
+
+    // Helper methods
+    public function getCurrentStock(): float
+    {
+        return $this->stockSummary?->total_qty ?? 0;
+    }
+
+    public function getAveragePurchasePrice(): float
+    {
+        return $this->stockSummary?->avg_purchase_price ?? 0;
+    }
+
+    public function getTotalStockValue(): float
+    {
+        return $this->getCurrentStock() * $this->getAveragePurchasePrice();
+    }
+
+    public function isLowStock(): bool
+    {
+        return $this->getCurrentStock() <= $this->low_stock_alert;
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class ProductCategory extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'name',
+        'description',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'category_id');
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Purchase extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'vendor_id',
+        'invoice_number',
+        'purchase_date',
+        'subtotal',
+        'discount',
+        'total',
+        'paid',
+        'due',
+        'status',
+        'notes',
+        'created_by',
+    ];
+
+    protected $casts = [
+        'purchase_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'paid' => 'decimal:2',
+        'due' => 'decimal:2',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    public function purchaseItems(): HasMany
+    {
+        return $this->hasMany(PurchaseItem::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // Calculate totals
+    public function calculateTotals(): void
+    {
+        $subtotal = $this->purchaseItems()->sum('total');
+        $total = $subtotal - $this->discount;
+        $due = $total - $this->paid;
+
+        $this->update([
+            'subtotal' => $subtotal,
+            'total' => $total,
+            'due' => $due,
+        ]);
+    }
+
+    // Add payment
+    public function addPayment(float $amount): void
+    {
+        $this->increment('paid', $amount);
+        $this->decrement('due', $amount);
+
+        // Update vendor due
+        $this->vendor->updateDue(-$amount);
+    }
+
+    // Check if purchase is fully paid
+    public function isFullyPaid(): bool
+    {
+        return $this->due <= 0;
+    }
+
+    // Get purchase status badge color
+    public function getStatusColor(): string
+    {
+        return match($this->status) {
+            'pending' => 'warning',
+            'completed' => 'success',
+            'returned' => 'destructive',
+            default => 'secondary'
+        };
+    }
+
+    // Generate unique invoice number
+    public static function generateInvoiceNumber(): string
+    {
+        $lastPurchase = static::latest('id')->first();
+        $nextNumber = $lastPurchase ? $lastPurchase->id + 1 : 1;
+        return 'PUR-' . date('Y') . '-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class PurchaseItem extends Model
+{
+    protected $fillable = [
+        'purchase_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+        'total',
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:2',
+        'unit_price' => 'decimal:2',
+        'total' => 'decimal:2',
+    ];
+
+    public function purchase(): BelongsTo
+    {
+        return $this->belongsTo(Purchase::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    // Calculate and update total
+    public function calculateTotal(): void
+    {
+        $this->update(['total' => round((float)$this->quantity * (float)$this->unit_price, 2)]);
+    }
+
+    // Boot method to auto-calculate total
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($purchaseItem) {
+            $purchaseItem->total = round((float)$purchaseItem->quantity * (float)$purchaseItem->unit_price, 2);
+        });
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+
+class Sale extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'customer_id',
+        'invoice_number',
+        'sale_date',
+        'subtotal',
+        'discount',
+        'discount_type',
+        'total',
+        'paid',
+        'due',
+        'payment_method',
+        'notes',
+        'created_by',
+    ];
+
+    protected $casts = [
+        'sale_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'paid' => 'decimal:2',
+        'due' => 'decimal:2',
+    ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($sale) {
+            if (empty($sale->invoice_number)) {
+                $sale->invoice_number = $sale->generateInvoiceNumber();
+            }
+        });
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function saleItems(): HasMany
+    {
+        return $this->hasMany(SaleItem::class);
+    }
+
+    // Generate unique invoice number
+    public function generateInvoiceNumber(): string
+    {
+        $date = now()->format('Ymd');
+        $lastSale = static::where('tenant_id', $this->tenant_id)
+            ->where('invoice_number', 'like', "INV-{$date}-%")
+            ->orderBy('invoice_number', 'desc')
+            ->first();
+
+        if ($lastSale) {
+            $lastNumber = (int) substr($lastSale->invoice_number, -4);
+            $newNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
+        } else {
+            $newNumber = '0001';
+        }
+
+        return "INV-{$date}-{$newNumber}";
+    }
+
+    // Calculate totals based on sale items
+    public function calculateTotals(): void
+    {
+        $subtotal = $this->saleItems()->sum(DB::raw('quantity * unit_price'));
+
+        // Apply discount based on type
+        if ($this->discount_type === 'percentage') {
+            $discountAmount = $subtotal * ($this->discount / 100);
+        } else {
+            $discountAmount = $this->discount;
+        }
+
+        $total = $subtotal - $discountAmount;
+        $due = $total - $this->paid;
+
+        $this->update([
+            'subtotal' => $subtotal,
+            'total' => $total,
+            'due' => max(0, $due),
+        ]);
+    }
+
+    // Check if sale is fully paid
+    public function isFullyPaid(): bool
+    {
+        return $this->due <= 0;
+    }
+
+    // Add payment to sale
+    public function addPayment(float $amount, string $method = 'cash'): void
+    {
+        $newPaid = (float)$this->paid + $amount;
+        $newDue = max(0, (float)$this->total - $newPaid);
+
+        $this->update([
+            'paid' => $newPaid,
+            'due' => $newDue,
+            'payment_method' => $method ?: $this->payment_method,
+        ]);
+
+        // Update customer due if customer exists
+        if ($this->customer) {
+            $this->customer->receivePayment($amount);
+        }
+    }    // Complete the sale
+    public function complete(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        // Update customer totals
+        if ($this->customer) {
+            $this->customer->updateTotalPurchases();
+            $this->customer->updateOutstandingBalance();
+        }
+    }
+
+    // Cancel the sale
+    public function cancel(): void
+    {
+        $this->update(['status' => 'cancelled']);
+
+        // Update customer balances
+        if ($this->customer) {
+            $this->customer->updateTotalPurchases();
+            $this->customer->updateOutstandingBalance();
+        }
+    }
+
+    // Refund the sale
+    public function refund(): void
+    {
+        $this->update([
+            'status' => 'refunded',
+            'paid' => 0,
+            'due' => $this->total,
+            'payment_status' => 'unpaid',
+        ]);
+
+        // Update customer balances
+        if ($this->customer) {
+            $this->customer->updateTotalPurchases();
+            $this->customer->updateOutstandingBalance();
+        }
+    }
+
+    // Check if sale can be edited
+    public function canBeEdited(): bool
+    {
+        return in_array($this->status, ['pending']);
+    }
+
+    // Check if sale can be deleted
+    public function canBeDeleted(): bool
+    {
+        return in_array($this->status, ['pending', 'cancelled']);
+    }
+
+    // Scope for completed sales
+    public function scopeCompleted($query)
+    {
+        return $query->where('status', 'completed');
+    }
+
+    // Scope for pending sales
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
+    // Scope for sales with outstanding balance
+    public function scopeWithOutstanding($query)
+    {
+        return $query->where('due', '>', 0);
+    }
+
+    // Scope for today's sales
+    public function scopeToday($query)
+    {
+        return $query->whereDate('sale_date', today());
+    }
+
+    // Scope for sales in date range
+    public function scopeDateRange($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('sale_date', [$startDate, $endDate]);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class SaleItem extends Model
+{
+    protected $fillable = [
+        'sale_id',
+        'product_id',
+        'quantity',
+        'unit_price',
+        'total',
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:2',
+        'unit_price' => 'decimal:2',
+        'total' => 'decimal:2',
+    ];
+
+    public function sale(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    // Calculate and update total
+    public function calculateTotal(): void
+    {
+        $this->update(['total' => round((float)$this->quantity * (float)$this->unit_price, 2)]);
+    }
+
+    // Boot method to auto-calculate total
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($saleItem) {
+            $saleItem->total = round((float)$saleItem->quantity * (float)$saleItem->unit_price, 2);
+        });
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class StockEntry extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'product_id',
+        'type',
+        'quantity',
+        'purchase_price',
+        'sale_price',
+        'entry_date',
+        'reference_id',
+        'reference_type',
+        'notes',
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:2',
+        'purchase_price' => 'decimal:2',
+        'sale_price' => 'decimal:2',
+        'entry_date' => 'date',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    // Scope for different types of entries
+    public function scopeOpeningStock($query)
+    {
+        return $query->where('type', 'opening');
+    }
+
+    public function scopePurchases($query)
+    {
+        return $query->where('type', 'purchase');
+    }
+
+    public function scopeSales($query)
+    {
+        return $query->where('type', 'sale');
+    }
+
+    public function scopeAdjustments($query)
+    {
+        return $query->where('type', 'adjustment');
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class StockSummary extends Model
+{
+    protected $table = 'stock_summary';
+
+    protected $fillable = [
+        'tenant_id',
+        'product_id',
+        'total_qty',
+        'avg_purchase_price',
+        'total_value',
+        'last_updated_at',
+    ];
+
+    protected $casts = [
+        'total_qty' => 'decimal:2',
+        'avg_purchase_price' => 'decimal:2',
+        'total_value' => 'decimal:2',
+        'last_updated_at' => 'datetime',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Update stock summary with new stock entry
+     * Implements weighted average price calculation
+     */
+    public static function updateStock(int $productId, float $quantity, float $purchasePrice = null): void
+    {
+        $product = Product::findOrFail($productId);
+
+        $summary = static::firstOrCreate(
+            ['product_id' => $productId],
+            [
+                'tenant_id' => $product->tenant_id,
+                'total_qty' => 0,
+                'avg_purchase_price' => 0,
+                'total_value' => 0
+            ]
+        );
+
+        $oldQty = $summary->total_qty;
+        $oldAvgPrice = $summary->avg_purchase_price;
+
+        $newQty = $oldQty + $quantity;
+
+        // Calculate new average price only for incoming stock with purchase price
+        if ($quantity > 0 && $purchasePrice !== null) {
+            $newAvgPrice = $oldQty > 0
+                ? (($oldQty * $oldAvgPrice) + ($quantity * $purchasePrice)) / $newQty
+                : $purchasePrice;
+        } else {
+            $newAvgPrice = $oldAvgPrice;
+        }
+
+        $summary->update([
+            'total_qty' => $newQty,
+            'avg_purchase_price' => $newAvgPrice,
+            'total_value' => $newQty * $newAvgPrice,
+            'last_updated_at' => now(),
+        ]);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Tenant extends Model
+{
+    protected $fillable = [
+        'name',
+        'slug',
+        'domain',
+        'email',
+        'phone',
+        'address',
+        'logo',
+        'settings',
+        'subscription_plan',
+        'subscription_expires_at',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'settings' => 'array',
+        'subscription_expires_at' => 'datetime',
+        'is_active' => 'boolean',
+    ];
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function productCategories(): HasMany
+    {
+        return $this->hasMany(ProductCategory::class);
+    }
+
+    public function vendors(): HasMany
+    {
+        return $this->hasMany(Vendor::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
+
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class);
+    }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(BankAccount::class);
+    }
+
+    public function fixedAssets(): HasMany
+    {
+        return $this->hasMany(FixedAsset::class);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Transaction extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'account_id',
+        'transaction_date',
+        'debit',
+        'credit',
+        'description',
+        'type',
+        'reference_id',
+        'reference_type',
+        'created_by',
+    ];
+
+    protected $casts = [
+        'transaction_date' => 'date',
+        'debit' => 'decimal:2',
+        'credit' => 'decimal:2',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // Get the referenced model (sale, purchase, etc.)
+    public function reference()
+    {
+        if ($this->reference_type && $this->reference_id) {
+            return $this->morphTo('reference');
+        }
+        return null;
+    }
+
+    // Create journal entry for a sale
+    public static function createSaleEntry(Sale $sale): void
+    {
+        // Debit: Accounts Receivable or Cash
+        // Credit: Sales Revenue
+        $accountsReceivable = Account::where('tenant_id', $sale->tenant_id)
+            ->where('code', '1120')
+            ->first();
+
+        $salesRevenue = Account::where('tenant_id', $sale->tenant_id)
+            ->where('code', '4100')
+            ->first();
+
+        if ($accountsReceivable && $salesRevenue) {
+            static::create([
+                'tenant_id' => $sale->tenant_id,
+                'reference_number' => $sale->invoice_number,
+                'transaction_date' => $sale->sale_date,
+                'description' => "Sale - {$sale->invoice_number}",
+                'debit_account_id' => $accountsReceivable->id,
+                'credit_account_id' => $salesRevenue->id,
+                'amount' => $sale->total,
+                'reference_type' => Sale::class,
+                'reference_id' => $sale->id,
+            ]);
+        }
+
+        // If there's tax, create tax entry
+        if ($sale->tax_amount > 0) {
+            $taxesPayable = Account::where('tenant_id', $sale->tenant_id)
+                ->where('code', '2120')
+                ->first();
+
+            if ($taxesPayable) {
+                static::create([
+                    'tenant_id' => $sale->tenant_id,
+                    'reference_number' => $sale->invoice_number . '-TAX',
+                    'transaction_date' => $sale->sale_date,
+                    'description' => "Sales Tax - {$sale->invoice_number}",
+                    'debit_account_id' => $accountsReceivable->id,
+                    'credit_account_id' => $taxesPayable->id,
+                    'amount' => $sale->tax_amount,
+                    'reference_type' => Sale::class,
+                    'reference_id' => $sale->id,
+                ]);
+            }
+        }
+    }
+
+    // Create journal entry for a purchase
+    public static function createPurchaseEntry(Purchase $purchase): void
+    {
+        // Debit: Inventory or Expense
+        // Credit: Accounts Payable
+        $inventory = Account::where('tenant_id', $purchase->tenant_id)
+            ->where('code', '1130')
+            ->first();
+
+        $accountsPayable = Account::where('tenant_id', $purchase->tenant_id)
+            ->where('code', '2110')
+            ->first();
+
+        if ($inventory && $accountsPayable) {
+            static::create([
+                'tenant_id' => $purchase->tenant_id,
+                'reference_number' => $purchase->invoice_number,
+                'transaction_date' => $purchase->purchase_date,
+                'description' => "Purchase - {$purchase->invoice_number}",
+                'debit_account_id' => $inventory->id,
+                'credit_account_id' => $accountsPayable->id,
+                'amount' => $purchase->total,
+                'reference_type' => Purchase::class,
+                'reference_id' => $purchase->id,
+            ]);
+        }
+    }
+
+    // Create payment entry
+    public static function createPaymentEntry(
+        int $tenantId,
+        string $referenceNumber,
+        string $date,
+        float $amount,
+        string $accountCode,
+        string $description,
+        string $referenceType = null,
+        int $referenceId = null
+    ): void {
+        $cash = Account::where('tenant_id', $tenantId)
+            ->where('code', '1110')
+            ->first();
+
+        $account = Account::where('tenant_id', $tenantId)
+            ->where('code', $accountCode)
+            ->first();
+
+        if ($cash && $account) {
+            static::create([
+                'tenant_id' => $tenantId,
+                'reference_number' => $referenceNumber,
+                'transaction_date' => $date,
+                'description' => $description,
+                'debit_account_id' => $cash->id,
+                'credit_account_id' => $account->id,
+                'amount' => $amount,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+            ]);
+        }
+    }
+
+    // Scope for transactions in date range
+    public function scopeDateRange($query, string $startDate, string $endDate)
+    {
+        return $query->whereBetween('transaction_date', [$startDate, $endDate]);
+    }
+
+    // Scope for transactions by account
+    public function scopeByAccount($query, int $accountId)
+    {
+        return $query->where(function ($q) use ($accountId) {
+            $q->where('debit_account_id', $accountId)
+              ->orWhere('credit_account_id', $accountId);
+        });
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Fortify\TwoFactorAuthenticatable;
+
+class User extends Authenticatable
+{
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'tenant_id',
+        'role',
+        'is_active',
+        'last_login_at',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'password',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'remember_token',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'two_factor_confirmed_at' => 'datetime',
+            'is_active' => 'boolean',
+            'last_login_at' => 'datetime',
+        ];
+    }
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+}
+
+
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Vendor extends Model
+{
+    protected $fillable = [
+        'tenant_id',
+        'name',
+        'company_name',
+        'phone',
+        'email',
+        'address',
+        'opening_due',
+        'current_due',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'opening_due' => 'decimal:2',
+        'current_due' => 'decimal:2',
+        'is_active' => 'boolean',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    // Calculate total amount due (opening + current)
+    public function getTotalDue(): float
+    {
+        return $this->opening_due + $this->current_due;
+    }
+
+    // Update current due amount
+    public function updateDue(float $amount): void
+    {
+        $this->increment('current_due', $amount);
+    }
+
+    // Payment received - reduce due amount
+    public function receivePayment(float $amount): void
+    {
+        $this->decrement('current_due', $amount);
+    }
+
+    // Get recent purchases
+    public function getRecentPurchases(int $limit = 10)
+    {
+        return $this->purchases()
+            ->latest('purchase_date')
+            ->limit($limit)
+            ->get();
+    }
+
+    // Get total purchase amount
+    public function getTotalPurchaseAmount(): float
+    {
+        return $this->purchases()->sum('total');
+    }
+
+    // Get total paid amount
+    public function getTotalPaidAmount(): float
+    {
+        return $this->purchases()->sum('paid');
+    }
+}
+
+ekhane sob gulo dilam tomake sudhu read kore rekhe dewar jonno. ekhon tumi fix ekta DashboardController dew and tsx dew 
