@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
-import AppLayout from '@/Layouts/AppLayout';
-import { ArrowLeft, Edit2, User, Phone, Mail, MapPin, CreditCard, TrendingUp, Calendar, ShoppingCart } from 'lucide-react';
+import AppLayout from '@/layouts/AppLayout';
+import PaymentModal from '@/components/PaymentModal';
+import { ArrowLeft, Edit2, User, Phone, Mail, MapPin, CreditCard, TrendingUp, Calendar, ShoppingCart, DollarSign } from 'lucide-react';
 
 interface Sale {
     id: number;
@@ -31,13 +32,33 @@ interface Props {
 }
 
 const CustomerShow: React.FC<Props> = ({ customer }) => {
-    const formatCurrency = (amount: number) => {
-        return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}`;
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+
+    const formatCurrency = (amount: number | string) => {
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+        if (isNaN(numAmount)) return '৳0.00';
+        return `৳${numAmount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
-    const totalSales = customer.sales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalPaid = customer.sales.reduce((sum, sale) => sum + sale.paid, 0);
-    const totalDue = customer.opening_due + customer.current_due;
+    const parseAmount = (amount: number | string): number => {
+        const parsed = typeof amount === 'string' ? parseFloat(amount) : amount;
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const totalSales = customer.sales.reduce((sum, sale) => sum + parseAmount(sale.total), 0);
+    const totalPaid = customer.sales.reduce((sum, sale) => sum + parseAmount(sale.paid), 0);
+    const totalDue = parseAmount(customer.opening_due) + parseAmount(customer.current_due);
+
+    const openPaymentModal = (sale: Sale) => {
+        setSelectedSale(sale);
+        setPaymentModalOpen(true);
+    };
+
+    const closePaymentModal = () => {
+        setPaymentModalOpen(false);
+        setSelectedSale(null);
+    };
 
     return (
         <AppLayout>
@@ -172,41 +193,56 @@ const CustomerShow: React.FC<Props> = ({ customer }) => {
                     {customer.sales && customer.sales.length > 0 ? (
                         <div className="space-y-3">
                             {customer.sales.map((sale) => (
-                                <Link
+                                <div
                                     key={sale.id}
-                                    href={`/sales/${sale.id}`}
                                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                                 >
-                                    <div className="flex items-center space-x-4">
+                                    <div className="flex items-center space-x-4 flex-1">
                                         <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold">
                                             {sale.invoice_number.slice(-2)}
                                         </div>
-                                        <div>
-                                            <p className="font-medium text-gray-900">{sale.invoice_number}</p>
+                                        <div className="flex-1">
+                                            <Link
+                                                href={`/sales/${sale.id}`}
+                                                className="font-medium text-gray-900 hover:text-indigo-600"
+                                            >
+                                                {sale.invoice_number}
+                                            </Link>
                                             <p className="text-sm text-gray-500 flex items-center">
                                                 <Calendar className="w-3 h-3 mr-1" />
                                                 {new Date(sale.sale_date).toLocaleDateString('en-GB')}
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-bold text-gray-900">{formatCurrency(sale.total)}</p>
-                                        <div className="flex items-center space-x-2 mt-1">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs ${
-                                                sale.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                sale.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                                'bg-red-100 text-red-700'
-                                            }`}>
-                                                {sale.status}
-                                            </span>
-                                            {sale.due > 0 && (
-                                                <span className="text-xs text-red-600 font-medium">
-                                                    Due: {formatCurrency(sale.due)}
+                                    <div className="flex items-center space-x-4">
+                                        <div className="text-right">
+                                            <p className="font-bold text-gray-900">{formatCurrency(sale.total)}</p>
+                                            <div className="flex items-center space-x-2 mt-1">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                                    sale.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                    sale.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                                    'bg-red-100 text-red-700'
+                                                }`}>
+                                                    {sale.status}
                                                 </span>
-                                            )}
+                                                {sale.due > 0 && (
+                                                    <span className="text-xs text-red-600 font-medium">
+                                                        Due: {formatCurrency(sale.due)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
+                                        {sale.due > 0 && sale.status === 'completed' && (
+                                            <button
+                                                onClick={() => openPaymentModal(sale)}
+                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Add Payment"
+                                            >
+                                                <DollarSign className="w-5 h-5" />
+                                            </button>
+                                        )}
                                     </div>
-                                </Link>
+                                </div>
                             ))}
                         </div>
                     ) : (
@@ -222,6 +258,18 @@ const CustomerShow: React.FC<Props> = ({ customer }) => {
                         </div>
                     )}
                 </div>
+
+                {/* Payment Modal */}
+                {selectedSale && (
+                    <PaymentModal
+                        isOpen={paymentModalOpen}
+                        onClose={closePaymentModal}
+                        saleId={selectedSale.id}
+                        invoiceNumber={selectedSale.invoice_number}
+                        dueAmount={parseAmount(selectedSale.due)}
+                        totalAmount={parseAmount(selectedSale.total)}
+                    />
+                )}
             </div>
         </AppLayout>
     );

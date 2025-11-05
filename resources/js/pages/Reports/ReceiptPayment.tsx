@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Download } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Download, Filter, X } from 'lucide-react';
 
 interface Receipts {
     opening_cash: number;
@@ -36,28 +37,49 @@ interface Props {
 export default function ReceiptPayment({ receipts, payments, start_date, end_date }: Props) {
     const [startDate, setStartDate] = useState(start_date);
     const [endDate, setEndDate] = useState(end_date);
+    const [dateError, setDateError] = useState('');
+    const [isFiltering, setIsFiltering] = useState(false);
 
-    const handleFilter = (newStartDate?: string, newEndDate?: string) => {
-        const filterStartDate = newStartDate || startDate;
-        const filterEndDate = newEndDate || endDate;
+    // Validate dates whenever they change
+    useEffect(() => {
+        if (startDate && endDate && startDate > endDate) {
+            setDateError('End date must be after start date');
+        } else {
+            setDateError('');
+        }
+    }, [startDate, endDate]);
 
+    const handleFilter = () => {
+        // Validate dates before filtering
+        if (startDate && endDate && startDate > endDate) {
+            setDateError('End date must be after start date');
+            return;
+        }
+
+        setIsFiltering(true);
         router.get('/reports/receipt-payment', {
-            start_date: filterStartDate,
-            end_date: filterEndDate,
+            start_date: startDate,
+            end_date: endDate,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => setIsFiltering(false),
         });
     };
 
-    const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newStartDate = e.target.value;
-        setStartDate(newStartDate);
-        handleFilter(newStartDate, endDate);
+    const handleClearFilters = () => {
+        setStartDate('');
+        setEndDate('');
+        setDateError('');
+
+        router.get('/reports/receipt-payment', {
+            start_date: '',
+            end_date: '',
+        });
     };
 
-    const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newEndDate = e.target.value;
-        setEndDate(newEndDate);
-        handleFilter(startDate, newEndDate);
-    };
+    // Check if filters are active
+    const hasActiveFilters = startDate || endDate;
 
     const handleExport = () => {
         window.open(`/reports/receipt-payment/export?start_date=${startDate}&end_date=${endDate}`);
@@ -84,29 +106,103 @@ export default function ReceiptPayment({ receipts, payments, start_date, end_dat
                 </div>
 
                 {/* Filter Section */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Filter Options</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="start_date">Start Date</Label>
-                                <Input
-                                    id="start_date"
-                                    type="date"
-                                    value={startDate}
-                                    onChange={handleStartDateChange}
-                                />
+                <Card className="shadow-sm">
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Filter className="w-5 h-5 text-blue-600" />
+                                <CardTitle className="text-lg">Filter Options</CardTitle>
                             </div>
-                            <div>
-                                <Label htmlFor="end_date">End Date</Label>
-                                <Input
-                                    id="end_date"
-                                    type="date"
-                                    value={endDate}
-                                    onChange={handleEndDateChange}
-                                />
+                            {hasActiveFilters && (
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                                    Filters Active
+                                </Badge>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Start Date */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="start_date" className="text-sm font-medium">
+                                        Start Date
+                                    </Label>
+                                    <Input
+                                        id="start_date"
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className={`transition-all ${dateError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                    />
+                                </div>
+
+                                {/* End Date */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="end_date" className="text-sm font-medium">
+                                        End Date
+                                    </Label>
+                                    <Input
+                                        id="end_date"
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className={`transition-all ${dateError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Error Message */}
+                            {dateError && (
+                                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-200">
+                                    <span className="font-medium">⚠</span>
+                                    <span>{dateError}</span>
+                                </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-3 pt-2 border-t">
+                                <Button
+                                    onClick={handleFilter}
+                                    disabled={!!dateError || isFiltering}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isFiltering ? (
+                                        <>
+                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Filtering...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Filter className="w-4 h-4 mr-2" />
+                                            Apply Filters
+                                        </>
+                                    )}
+                                </Button>
+                                {hasActiveFilters && (
+                                    <Button
+                                        onClick={handleClearFilters}
+                                        variant="outline"
+                                        className="border-gray-300 hover:bg-gray-50"
+                                    >
+                                        <X className="w-4 h-4 mr-2" />
+                                        Clear All
+                                    </Button>
+                                )}
+                                {(startDate || endDate) && (
+                                    <span className="text-sm text-gray-500 ml-2">
+                                        {startDate && endDate ? (
+                                            <>Period: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</>
+                                        ) : startDate ? (
+                                            <>From: {new Date(startDate).toLocaleDateString()}</>
+                                        ) : (
+                                            <>Until: {new Date(endDate).toLocaleDateString()}</>
+                                        )}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </CardContent>

@@ -6,10 +6,11 @@ import { ArrowLeft, Save } from 'lucide-react';
 interface Props {
     bank_balance: number;
     transaction_types: string[];
-    categories: string[];
+    credit_categories: string[];
+    debit_categories: string[];
 }
 
-const BankTransactionCreate: React.FC<Props> = ({ bank_balance, transaction_types, categories }) => {
+const BankTransactionCreate: React.FC<Props> = ({ bank_balance, transaction_types, credit_categories, debit_categories }) => {
     const [customCategories, setCustomCategories] = React.useState<string[]>([]);
     const [showCustomInput, setShowCustomInput] = React.useState(false);
 
@@ -29,11 +30,11 @@ const BankTransactionCreate: React.FC<Props> = ({ bank_balance, transaction_type
         description: '',
     });
 
-    // Filter out 'other' and format categories
-    const filteredCategories = categories.filter(cat => cat !== 'other');
+    // Get current categories based on transaction type
+    const currentCategories = data.type === 'credit' ? credit_categories : debit_categories;
 
     // Combine built-in and custom categories
-    const allCategories = [...filteredCategories, ...customCategories];
+    const allCategories = [...currentCategories, ...customCategories];
 
     const formatCategoryName = (category: string) => {
         return category
@@ -100,7 +101,10 @@ const BankTransactionCreate: React.FC<Props> = ({ bank_balance, transaction_type
                             </label>
                             <select
                                 value={data.type}
-                                onChange={(e) => setData('type', e.target.value)}
+                                onChange={(e) => {
+                                    setData('type', e.target.value);
+                                    setData('category', ''); // Reset category when type changes
+                                }}
                                 className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${errors.type ? 'border-red-500' : ''}`}
                             >
                                 {transaction_types.map((type) => (

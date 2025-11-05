@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/AppLayout';
+import PaymentModal from '@/components/PaymentModal';
 import { Search, Filter, Plus, Edit2, Trash2, Eye, CheckCircle, DollarSign } from 'lucide-react';
 
 interface Sale {
@@ -29,21 +30,29 @@ interface Props {
     filters: {
         search?: string;
         status?: string;
+        date_from?: string;
+        date_to?: string;
     };
 }
 
 const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || '');
+    const [dateFrom, setDateFrom] = useState(filters.date_from || '');
+    const [dateTo, setDateTo] = useState(filters.date_to || '');
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
-        router.get('/sales', { search, status }, { preserveState: true });
+        router.get('/sales', { search, status, date_from: dateFrom, date_to: dateTo }, { preserveState: true });
     };
 
     const clearFilters = () => {
         setSearch('');
         setStatus('');
+        setDateFrom('');
+        setDateTo('');
         router.get('/sales', {}, { preserveState: true });
     };
 
@@ -57,6 +66,16 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
         if (confirm('Complete this sale? Stock will be deducted.')) {
             router.post(`/sales/${id}/complete`);
         }
+    };
+
+    const openPaymentModal = (sale: Sale) => {
+        setSelectedSale(sale);
+        setPaymentModalOpen(true);
+    };
+
+    const closePaymentModal = () => {
+        setPaymentModalOpen(false);
+        setSelectedSale(null);
     };
 
     const formatCurrency = (amount: number | string) => {
@@ -158,27 +177,49 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
 
                 {/* Filters */}
                 <form onSubmit={handleSearch} className="bg-white rounded-xl shadow-sm border p-6">
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="lg:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                             <input
                                 type="text"
-                                placeholder="Search by invoice or customer..."
+                                placeholder="Invoice or customer..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
-                        <select
-                            value={status}
-                            onChange={(e) => setStatus(e.target.value)}
-                            className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                        >
-                            <option value="">All Status</option>
-                            <option value="pending">Pending</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="returned">Returned</option>
-                        </select>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => setDateFrom(e.target.value)}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => setDateTo(e.target.value)}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select
+                                value={status}
+                                onChange={(e) => setStatus(e.target.value)}
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            >
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="returned">Returned</option>
+                            </select>
+                        </div>
                     </div>
                     <div className="flex items-center space-x-4 mt-4">
                         <button
@@ -188,7 +229,7 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
                             <Search className="w-4 h-4" />
                             <span>Search</span>
                         </button>
-                        {(search || status) && (
+                        {(search || status || dateFrom || dateTo) && (
                             <button
                                 type="button"
                                 onClick={clearFilters}
@@ -286,13 +327,13 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
                                                     </>
                                                 )}
                                                 {getPaymentStatus(sale.paid, sale.total) !== 'paid' && sale.status === 'completed' && (
-                                                    <Link
-                                                        href={`/sales/${sale.id}?payment=true`}
+                                                    <button
+                                                        onClick={() => openPaymentModal(sale)}
                                                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                                                         title="Add Payment"
                                                     >
                                                         <DollarSign className="w-4 h-4" />
-                                                    </Link>
+                                                    </button>
                                                 )}
                                                 {sale.status === 'pending' && (
                                                     <button
@@ -340,6 +381,18 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
                         </div>
                     )}
                 </div>
+
+                {/* Payment Modal */}
+                {selectedSale && (
+                    <PaymentModal
+                        isOpen={paymentModalOpen}
+                        onClose={closePaymentModal}
+                        saleId={selectedSale.id}
+                        invoiceNumber={selectedSale.invoice_number}
+                        dueAmount={typeof selectedSale.due === 'string' ? parseFloat(selectedSale.due) : selectedSale.due}
+                        totalAmount={typeof selectedSale.total === 'string' ? parseFloat(selectedSale.total) : selectedSale.total}
+                    />
+                )}
             </div>
         </AppLayout>
     );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import AppLayout from '@/Layouts/AppLayout';
+import AppLayout from '@/layouts/AppLayout';
 import {
     Users,
     Plus,
@@ -14,6 +14,7 @@ import {
     MapPin,
     DollarSign,
     AlertCircle,
+    ShoppingBag,
 } from 'lucide-react';
 
 interface Customer {
@@ -27,6 +28,8 @@ interface Customer {
     credit_limit: number;
     is_active: boolean;
     sales_count: number;
+    total_sales_amount: number;
+    total_due: number;
 }
 
 interface Props {
@@ -130,10 +133,10 @@ const CustomersIndex: React.FC<Props> = ({ customers, filters }) => {
                                     Contact
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Location
+                                    Total Sales
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Due Amount
+                                    Total Due
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                     Status
@@ -177,25 +180,28 @@ const CustomersIndex: React.FC<Props> = ({ customers, filters }) => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {customer.city ? (
+                                            <div className="space-y-1">
                                                 <div className="flex items-center text-sm text-gray-900">
-                                                    <MapPin className="w-4 h-4 mr-2 text-gray-400" />
-                                                    {customer.city}
+                                                    <ShoppingBag className="w-4 h-4 mr-2 text-gray-400" />
+                                                    <span className="font-medium">
+                                                        {customer.sales_count || 0} orders
+                                                    </span>
                                                 </div>
-                                            ) : (
-                                                <span className="text-gray-400">-</span>
-                                            )}
+                                                <div className="text-sm text-gray-600">
+                                                    {formatCurrency(customer.total_sales_amount || 0)}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {customer.current_due > 0 ? (
+                                            {customer.total_due > 0 ? (
                                                 <div className="flex items-center">
                                                     <DollarSign className="w-4 h-4 text-red-500 mr-1" />
                                                     <span className="font-medium text-red-600">
-                                                        {formatCurrency(customer.current_due)}
+                                                        {formatCurrency(customer.total_due)}
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <span className="text-gray-400">-</span>
+                                                <span className="text-sm text-green-600 font-medium">Paid</span>
                                             )}
                                         </td>
                                         <td className="px-6 py-4">

@@ -31,19 +31,12 @@ class PurchaseItem extends Model
         return $this->belongsTo(Product::class);
     }
 
-    // Calculate and update total
+    // Calculate and update total (optional - only when explicitly called)
     public function calculateTotal(): void
     {
         $this->update(['total' => round((float)$this->quantity * (float)$this->unit_price, 2)]);
     }
 
-    // Boot method to auto-calculate total
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::saving(function ($purchaseItem) {
-            $purchaseItem->total = round((float)$purchaseItem->quantity * (float)$purchaseItem->unit_price, 2);
-        });
-    }
+    // Note: Auto-calculation removed to allow exact total amounts
+    // Total will be calculated in controller based on user input
 }

@@ -39,11 +39,37 @@ class HandleInertiaRequests extends Middleware
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
-        // Get bank balance if user is authenticated
+        // Get bank balance and tenant info if user is authenticated
         $bankBalance = null;
+        $tenant = null;
         if ($request->user() && $request->user()->tenant_id) {
             $bankAccount = Account::getBankAccount($request->user()->tenant_id);
             $bankBalance = $bankAccount ? $bankAccount->current_balance : 0;
+
+            // Get tenant information
+            $tenant = \App\Models\Tenant::find($request->user()->tenant_id);
+        }
+
+        // Get user permissions
+        $permissions = [];
+        if ($request->user()) {
+            $userRole = $request->user()->role ?? 'user';
+            $isSuperAdmin = $request->user()->is_super_admin ?? false;
+
+            // Define permissions based on role
+            $permissions = [
+                'canViewDashboard' => true,
+                'canManageInventory' => in_array($userRole, ['admin', 'manager']) || $isSuperAdmin,
+                'canManagePurchases' => in_array($userRole, ['admin', 'manager']) || $isSuperAdmin,
+                'canManageSales' => in_array($userRole, ['admin', 'manager', 'staff']) || $isSuperAdmin,
+                'canManageAccounting' => in_array($userRole, ['admin', 'manager']) || $isSuperAdmin,
+                'canManageFixedAssets' => in_array($userRole, ['admin', 'manager']) || $isSuperAdmin,
+                'canViewReports' => in_array($userRole, ['admin', 'manager']) || $isSuperAdmin,
+                'canManageSettings' => in_array($userRole, ['admin']) || $isSuperAdmin,
+                'canAccessPOS' => true, // All users can access POS
+                'isSuperAdmin' => $isSuperAdmin,
+                'role' => $userRole,
+            ];
         }
 
         return [
@@ -52,7 +78,9 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+                'permissions' => $permissions,
             ],
+            'tenant' => $tenant,
             'bank_balance' => $bankBalance,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [

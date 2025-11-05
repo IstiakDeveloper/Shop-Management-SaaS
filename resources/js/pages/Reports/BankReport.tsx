@@ -4,7 +4,8 @@ import AppLayout from '../../layouts/AppLayout';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
-import { Download, FileText } from 'lucide-react';
+import { Badge } from '../../components/ui/badge';
+import { Download, FileText, Filter, X } from 'lucide-react';
 
 interface DailyTransaction {
     date: string;
@@ -38,6 +39,7 @@ interface Props {
 export default function BankReport({ accountName, openingBalance, dailyTransactions, filters }: Props) {
     const [selectedYear, setSelectedYear] = useState(filters.year.toString());
     const [selectedMonth, setSelectedMonth] = useState(filters.month.toString());
+    const [isFiltering, setIsFiltering] = useState(false);
 
     const months = [
         { value: '1', label: 'January' },
@@ -57,27 +59,35 @@ export default function BankReport({ accountName, openingBalance, dailyTransacti
     const currentYear = new Date().getFullYear();
     const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
-    const handleFilter = (newYear?: string, newMonth?: string) => {
-        const filterYear = newYear || selectedYear;
-        const filterMonth = newMonth || selectedMonth;
-
+    const handleFilter = () => {
+        setIsFiltering(true);
         router.get('/reports/bank-report', {
-            year: filterYear,
-            month: filterMonth,
+            year: selectedYear,
+            month: selectedMonth,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => setIsFiltering(false),
         });
     };
 
-    const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newYear = e.target.value;
-        setSelectedYear(newYear);
-        handleFilter(newYear, selectedMonth);
+    const handleClearFilters = () => {
+        const now = new Date();
+        const currentYearStr = now.getFullYear().toString();
+        const currentMonthStr = (now.getMonth() + 1).toString();
+
+        setSelectedYear(currentYearStr);
+        setSelectedMonth(currentMonthStr);
+
+        router.get('/reports/bank-report', {
+            year: currentYearStr,
+            month: currentMonthStr,
+        });
     };
 
-    const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newMonth = e.target.value;
-        setSelectedMonth(newMonth);
-        handleFilter(selectedYear, newMonth);
-    };
+    // Check if filters differ from current month/year
+    const now = new Date();
+    const hasActiveFilters = selectedYear !== now.getFullYear().toString() || selectedMonth !== (now.getMonth() + 1).toString();
 
     const handleExport = () => {
         router.post('/reports/bank-report/export', {
@@ -124,32 +134,98 @@ export default function BankReport({ accountName, openingBalance, dailyTransacti
                             </Button>
                         </div>
 
-                        {/* Account Selection Area */}
-                        <div className="flex gap-4 items-center">
-                            <div className="flex-1">
-                                <select className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
-                                    <option value="mousumi">{accountName}</option>
-                                </select>
-                            </div>
-                            <div>
-                                <select className="px-3 py-2 border border-gray-300 rounded-md bg-white" value={selectedMonth} onChange={handleMonthChange}>
-                                    {months.map(month => (
-                                        <option key={month.value} value={month.value}>
-                                            {month.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <select className="px-3 py-2 border border-gray-300 rounded-md bg-white" value={selectedYear} onChange={handleYearChange}>
-                                    {years.map(year => (
-                                        <option key={year} value={year.toString()}>
-                                            {year}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+                        {/* Filter Section */}
+                        <Card className="shadow-sm">
+                            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Filter className="w-5 h-5 text-blue-600" />
+                                        <CardTitle className="text-lg">Filter Options</CardTitle>
+                                    </div>
+                                    {hasActiveFilters && (
+                                        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                                            Filters Active
+                                        </Badge>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Account</label>
+                                            <select className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                                                <option value="mousumi">{accountName}</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Month</label>
+                                            <select
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+                                                value={selectedMonth}
+                                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                            >
+                                                {months.map(month => (
+                                                    <option key={month.value} value={month.value}>
+                                                        {month.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Year</label>
+                                            <select
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white"
+                                                value={selectedYear}
+                                                onChange={(e) => setSelectedYear(e.target.value)}
+                                            >
+                                                {years.map(year => (
+                                                    <option key={year} value={year.toString()}>
+                                                        {year}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 pt-2 border-t">
+                                        <Button
+                                            onClick={handleFilter}
+                                            disabled={isFiltering}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isFiltering ? (
+                                                <>
+                                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Filtering...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Filter className="w-4 h-4 mr-2" />
+                                                    Apply Filters
+                                                </>
+                                            )}
+                                        </Button>
+                                        {hasActiveFilters && (
+                                            <Button
+                                                onClick={handleClearFilters}
+                                                variant="outline"
+                                                className="border-gray-300 hover:bg-gray-50"
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Reset to Current Month
+                                            </Button>
+                                        )}
+                                        <span className="text-sm text-gray-500 ml-2">
+                                            Viewing: {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                                        </span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Bank Report Table */}

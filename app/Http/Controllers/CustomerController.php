@@ -17,9 +17,7 @@ class CustomerController extends Controller
     public function index(Request $request): Response
     {
         $query = Customer::where('tenant_id', Auth::user()->tenant_id)
-            ->with(['sales' => function ($q) {
-                $q->latest('sale_date');
-            }]);
+            ->withCount('sales');
 
         if ($request->has('search')) {
             $query->search($request->search);
@@ -34,6 +32,24 @@ class CustomerController extends Controller
         }
 
         $customers = $query->orderBy('name')->paginate(20);
+
+        // Add computed fields for each customer
+        $customers->getCollection()->transform(function ($customer) {
+            // Get total sales amount
+            $totalSales = \App\Models\Sale::where('customer_id', $customer->id)
+                ->where('status', 'completed')
+                ->sum('total');
+
+            // Get total due
+            $totalDue = \App\Models\Sale::where('customer_id', $customer->id)
+                ->where('status', 'completed')
+                ->sum('due');
+
+            $customer->total_sales_amount = $totalSales;
+            $customer->total_due = $totalDue;
+
+            return $customer;
+        });
 
         return Inertia::render('Customers/Index', [
             'customers' => $customers,
@@ -75,7 +91,9 @@ class CustomerController extends Controller
     {
         $customer->load([
             'sales' => function ($query) {
-                $query->latest('sale_date')->with('saleItems.product');
+                $query->where('status', 'completed')
+                    ->latest('sale_date')
+                    ->select('id', 'customer_id', 'invoice_number', 'sale_date', 'total', 'paid', 'due', 'status');
             }
         ]);
 

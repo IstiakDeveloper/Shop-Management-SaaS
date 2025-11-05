@@ -109,13 +109,23 @@ class Sale extends Model
                 $this->sale_date,
                 $this->created_by
             );
+
+            // Update customer current_due if customer exists and there's a due amount
+            if ($this->customer_id && $this->due > 0) {
+                $customer = Customer::find($this->customer_id);
+                if ($customer) {
+                    $customer->current_due = $customer->current_due + $this->due;
+                    $customer->save();
+                }
+            }
         });
     }
 
     // Generate unique invoice number
     public function generateInvoiceNumber(): string
     {
-        $date = now()->format('Ymd');
+        // Use sale_date instead of current date for invoice number
+        $date = \Carbon\Carbon::parse($this->sale_date)->format('Ymd');
         $lastSale = static::where('tenant_id', $this->tenant_id)
             ->where('invoice_number', 'like', "INV-{$date}-%")
             ->orderBy('invoice_number', 'desc')
@@ -180,13 +190,8 @@ class Sale extends Model
             $this->id,
             'sale',
             now()->toDateString(),
-            1
+            \Illuminate\Support\Facades\Auth::id() ?? 1
         );
-
-        // Update customer due if customer exists
-        if ($this->customer) {
-            $this->customer->receivePayment($amount);
-        }
     }
 
     // Complete the sale

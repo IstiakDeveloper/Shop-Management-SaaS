@@ -22,6 +22,26 @@ use App\Http\Controllers\Reports\BankReportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use Illuminate\Support\Facades\Artisan;
+
+// Public routes for deployment
+Route::get('/migrate', function () {
+    try {
+        Artisan::call('migrate', ['--force' => true]);
+        return 'Migration completed successfully!';
+    } catch (\Exception $e) {
+        return 'Migration failed: ' . $e->getMessage();
+    }
+});
+
+Route::get('/storage-link', function () {
+    try {
+        Artisan::call('storage:link');
+        return 'Storage link created successfully!';
+    } catch (\Exception $e) {
+        return 'Storage link failed: ' . $e->getMessage();
+    }
+});
 
 Route::get('/', function () {
     return redirect('/login');
@@ -39,7 +59,7 @@ Route::middleware('guest')->group(function () {
 
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
     Route::post('register', [RegisteredUserController::class, 'store']);
-    
+
     // Tenant Registration Routes
     Route::get('tenant-register', [\App\Http\Controllers\TenantRegistrationController::class, 'create'])->name('tenant.register');
     Route::post('tenant-register', [\App\Http\Controllers\TenantRegistrationController::class, 'store'])->name('tenant.register.store');
@@ -47,11 +67,14 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+    // Dashboard - All authenticated users
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Product Management Routes
-    Route::resource('products', ProductController::class);
-    Route::resource('product-categories', ProductCategoryController::class)->names([
+    // Product Management Routes - Admin, Manager only
+    Route::middleware(['role:admin,manager'])->group(function () {
+        Route::resource('products', ProductController::class);
+        Route::resource('product-categories', ProductCategoryController::class)->names([
         'index' => 'product-categories.index',
         'create' => 'product-categories.create',
         'store' => 'product-categories.store',
@@ -61,41 +84,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'destroy' => 'product-categories.destroy',
     ]);
 
-    // Stock Management Routes
-    Route::resource('stock', StockController::class)->except(['edit', 'update', 'destroy']);
-    Route::get('stock/history/{product}', [StockController::class, 'history'])->name('stock.history');
-    Route::post('stock/bulk-adjustment', [StockController::class, 'bulkAdjustment'])->name('stock.bulk-adjustment');
-    Route::get('stock/low-stock', [StockController::class, 'lowStock'])->name('stock.low-stock');
+        // Stock Management Routes
+        Route::resource('stock', StockController::class)->except(['edit', 'update', 'destroy']);
+        Route::get('stock/history/{product}', [StockController::class, 'history'])->name('stock.history');
+        Route::post('stock/bulk-adjustment', [StockController::class, 'bulkAdjustment'])->name('stock.bulk-adjustment');
+        Route::get('stock/low-stock', [StockController::class, 'lowStock'])->name('stock.low-stock');
 
-    // Purchase Management Routes
-    Route::resource('purchases', PurchaseController::class);
+        // Purchase Management Routes
+        Route::resource('purchases', PurchaseController::class);
 
-    // Customer Management Routes
-    Route::resource('customers', CustomerController::class);
+        // Vendor Management Routes
+        Route::resource('vendors', VendorController::class);
+        Route::post('vendors/{vendor}/payment', [VendorController::class, 'payment'])->name('vendors.payment');
+    });
 
-    // Vendor Management Routes
-    Route::resource('vendors', VendorController::class);
-    Route::post('vendors/{vendor}/payment', [VendorController::class, 'payment'])->name('vendors.payment');
+    // Customer Management Routes - Admin, Manager, Staff
+    Route::middleware(['role:admin,manager,staff'])->group(function () {
+        Route::resource('customers', CustomerController::class);
+    });
 
-    // Sales Management Routes
+    // Sales Management Routes - Admin, Manager, Staff, User (All can access POS)
     Route::resource('sales', SaleController::class);
     Route::get('sales/{sale}/print', [SaleController::class, 'print'])->name('sales.print');
     Route::post('sales/{sale}/payments', [SaleController::class, 'addPayment'])->name('sales.payments.add');
 
-    // Accounting System Routes
-    Route::resource('accounts', AccountController::class);
-    Route::get('accounts/bank-transactions', [AccountController::class, 'bankTransactions'])->name('accounts.bank-transactions');
+    // Accounting System Routes - Admin, Manager only
+    Route::middleware(['role:admin,manager'])->group(function () {
+        Route::resource('accounts', AccountController::class);
+        Route::get('accounts/bank-transactions', [AccountController::class, 'bankTransactions'])->name('accounts.bank-transactions');
 
-    // Bank Transactions Routes
-    Route::resource('bank-transactions', BankTransactionController::class)->except(['edit', 'update']);
+        // Bank Transactions Routes
+        Route::resource('bank-transactions', BankTransactionController::class)->except(['edit', 'update']);
 
-    // Expenses Routes (using bank transactions with category 'expense')
-    Route::get('expenses', [BankTransactionController::class, 'expenses'])->name('expenses.index');
-    Route::get('expenses/{bankTransaction}', [BankTransactionController::class, 'expenseShow'])->name('expenses.show');
+        // Expenses Routes (using bank transactions with category 'expense')
+        Route::get('expenses', [BankTransactionController::class, 'expenses'])->name('expenses.index');
+        Route::get('expenses/{bankTransaction}', [BankTransactionController::class, 'expenseShow'])->name('expenses.show');
 
-    // Fixed Assets Routes
-    Route::get('fixed-assets/depreciation-report', [FixedAssetController::class, 'depreciationReport'])->name('fixed-assets.depreciation-report');
-    Route::resource('fixed-assets', FixedAssetController::class)->names([
+        // Fixed Assets Routes
+        Route::get('fixed-assets/depreciation-report', [FixedAssetController::class, 'depreciationReport'])->name('fixed-assets.depreciation-report');
+        Route::resource('fixed-assets', FixedAssetController::class)->names([
         'index' => 'fixed-assets.index',
         'create' => 'fixed-assets.create',
         'store' => 'fixed-assets.store',
@@ -104,21 +131,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'update' => 'fixed-assets.update',
         'destroy' => 'fixed-assets.destroy',
     ]);
-    Route::post('fixed-assets/{fixedAsset}/update-depreciation', [FixedAssetController::class, 'updateDepreciation'])->name('fixed-assets.update-depreciation');
-    Route::post('fixed-assets/{fixedAsset}/dispose', [FixedAssetController::class, 'dispose'])->name('fixed-assets.dispose');
-    Route::post('fixed-assets/{fixedAsset}/sell', [FixedAssetController::class, 'sell'])->name('fixed-assets.sell');
+        Route::post('fixed-assets/{fixedAsset}/update-depreciation', [FixedAssetController::class, 'updateDepreciation'])->name('fixed-assets.update-depreciation');
+        Route::post('fixed-assets/{fixedAsset}/dispose', [FixedAssetController::class, 'dispose'])->name('fixed-assets.dispose');
+        Route::post('fixed-assets/{fixedAsset}/sell', [FixedAssetController::class, 'sell'])->name('fixed-assets.sell');
+    });
 
-    // Financial Reports Routes
-    Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-    Route::get('reports/profit-and-loss', [ReportController::class, 'profitAndLoss'])->name('reports.profit-and-loss');
-    // Redirect old balance sheet route to new one
-    Route::get('reports/balance-sheet', function() {
-        return redirect('/reports/balance-sheet-report');
-    })->name('reports.balance-sheet');
-    Route::get('reports/cash-flow', [ReportController::class, 'cashFlow'])->name('reports.cash-flow');
+    // Financial Reports Routes - Admin, Manager only
+    Route::middleware(['role:admin,manager'])->group(function () {
+        Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('reports/profit-and-loss', [ReportController::class, 'profitAndLoss'])->name('reports.profit-and-loss');
+        // Redirect old balance sheet route to new one
+        Route::get('reports/balance-sheet', function() {
+            return redirect('/reports/balance-sheet-report');
+        })->name('reports.balance-sheet');
+        Route::get('reports/cash-flow', [ReportController::class, 'cashFlow'])->name('reports.cash-flow');
 
-    // New Report Routes
-    Route::prefix('reports')->name('reports.')->group(function () {
+        // New Report Routes
+        Route::prefix('reports')->name('reports.')->group(function () {
         // Product Analysis Report
         Route::get('product-analysis', [ProductReportController::class, 'index'])->name('product-analysis');
         Route::post('product-analysis/export', [ProductReportController::class, 'export'])->name('product-analysis.export');
@@ -143,6 +172,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('bank-report/export', [BankReportController::class, 'export'])->name('bank-report.export');
         Route::post('bank-report/pdf', [BankReportController::class, 'downloadPdf'])->name('bank-report.pdf');
         Route::get('bank-report/pdf', [BankReportController::class, 'downloadPdf'])->name('bank-report.pdf.get');
+        });
     });
 });
 

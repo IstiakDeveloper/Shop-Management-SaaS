@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import SettingsNav from '../../components/settings-nav';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -67,18 +68,30 @@ export default function Password() {
 
     return (
         <AppLayout>
-            <Head title="Password Settings" />
+            <Head title="Password - Settings" />
 
             <div className="py-6">
-                <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-gray-900">Password Settings</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
                         <p className="text-gray-600 mt-1">
-                            Ensure your account is using a long, random password to stay secure
+                            Manage your account and preferences
                         </p>
                     </div>
 
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* Settings Navigation */}
+                        <div className="lg:col-span-1">
+                            <Card>
+                                <CardContent className="p-4">
+                                    <SettingsNav currentPath="/settings/password" />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="lg:col-span-3 space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -202,6 +215,8 @@ export default function Password() {
                             </form>
                         </CardContent>
                     </Card>
+                        </div>
+                    </div>
                 </div>
             </div>
         </AppLayout>

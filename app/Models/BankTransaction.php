@@ -55,8 +55,16 @@ class BankTransaction extends Model
                 throw new \RuntimeException('Bank account not found for tenant');
             }
 
-            // Calculate balance after transaction
-            $balanceAfter = $bankAccount->current_balance + $amount;
+            $transactionDate = $date ?? now()->toDateString();
+
+            // Get balance before this transaction (at the transaction date)
+            $previousTransaction = self::where('tenant_id', $tenantId)
+                ->where('transaction_date', '<', $transactionDate)
+                ->orderBy('transaction_date', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $balanceAfter = $previousTransaction ? (float)$previousTransaction->balance_after + $amount : $amount;
 
             $bankTransaction = self::create([
                 'tenant_id' => $tenantId,
@@ -64,13 +72,17 @@ class BankTransaction extends Model
                 'category' => $category,
                 'amount' => $amount,
                 'balance_after' => $balanceAfter,
-                'transaction_date' => $date ?? now()->toDateString(),
+                'transaction_date' => $transactionDate,
                 'description' => $description,
                 'reference_id' => $referenceId,
                 'reference_type' => $referenceType,
                 'created_by' => $createdBy ?? 1,
             ]);
 
+            // Recalculate balances for all transactions after this date
+            self::recalculateBalancesAfter($tenantId, $transactionDate);
+
+            // Update bank account current balance
             $bankAccount->credit($amount);
 
             return $bankTransaction;
@@ -95,8 +107,16 @@ class BankTransaction extends Model
                 throw new \RuntimeException('Bank account not found for tenant');
             }
 
-            // Calculate balance after transaction
-            $balanceAfter = $bankAccount->current_balance - $amount;
+            $transactionDate = $date ?? now()->toDateString();
+
+            // Get balance before this transaction (at the transaction date)
+            $previousTransaction = self::where('tenant_id', $tenantId)
+                ->where('transaction_date', '<', $transactionDate)
+                ->orderBy('transaction_date', 'desc')
+                ->orderBy('id', 'desc')
+                ->first();
+
+            $balanceAfter = $previousTransaction ? (float)$previousTransaction->balance_after - $amount : -$amount;
 
             $bankTransaction = self::create([
                 'tenant_id' => $tenantId,
@@ -104,17 +124,56 @@ class BankTransaction extends Model
                 'category' => $category,
                 'amount' => $amount,
                 'balance_after' => $balanceAfter,
-                'transaction_date' => $date ?? now()->toDateString(),
+                'transaction_date' => $transactionDate,
                 'description' => $description,
                 'reference_id' => $referenceId,
                 'reference_type' => $referenceType,
                 'created_by' => $createdBy ?? 1,
             ]);
 
+            // Recalculate balances for all transactions after this date
+            self::recalculateBalancesAfter($tenantId, $transactionDate);
+
+            // Update bank account current balance
             $bankAccount->debit($amount);
 
             return $bankTransaction;
         });
+    }
+
+    // Recalculate balances for all transactions after a specific date
+    private static function recalculateBalancesAfter(int $tenantId, string $fromDate): void
+    {
+        // Get all transactions from this date onwards, ordered chronologically
+        $transactions = self::where('tenant_id', $tenantId)
+            ->where('transaction_date', '>=', $fromDate)
+            ->orderBy('transaction_date', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        if ($transactions->isEmpty()) {
+            return;
+        }
+
+        // Get the balance before the first transaction
+        $previousTransaction = self::where('tenant_id', $tenantId)
+            ->where('transaction_date', '<', $fromDate)
+            ->orderBy('transaction_date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $runningBalance = $previousTransaction ? (float)$previousTransaction->balance_after : 0;
+
+        // Recalculate each transaction's balance
+        foreach ($transactions as $transaction) {
+            if ($transaction->type === 'credit') {
+                $runningBalance += (float)$transaction->amount;
+            } else {
+                $runningBalance -= (float)$transaction->amount;
+            }
+
+            $transaction->update(['balance_after' => $runningBalance]);
+        }
     }
 
     // Scope for credits

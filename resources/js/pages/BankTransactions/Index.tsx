@@ -36,15 +36,28 @@ interface Props {
     bank_balance: number;
     filters: { search?: string; type?: string; category?: string; start_date?: string; end_date?: string };
     transaction_types: string[];
-    categories: string[];
+    credit_categories: string[];
+    debit_categories: string[];
+    category_summary: Record<string, number>;
 }
 
-const BankTransactionsIndex: React.FC<Props> = ({ transactions, bank_balance, filters, transaction_types, categories }) => {
+const BankTransactionsIndex: React.FC<Props> = ({
+    transactions,
+    bank_balance,
+    filters,
+    transaction_types,
+    credit_categories,
+    debit_categories,
+    category_summary
+}) => {
     const [search, setSearch] = useState(filters?.search || '');
     const [type, setType] = useState(filters?.type || '');
     const [category, setCategory] = useState(filters?.category || '');
     const [startDate, setStartDate] = useState(filters?.start_date || '');
     const [endDate, setEndDate] = useState(filters?.end_date || '');
+
+    // Get current categories based on selected type
+    const currentCategories = type === 'credit' ? credit_categories : type === 'debit' ? debit_categories : [...credit_categories, ...debit_categories];
     const [showFilters, setShowFilters] = useState(false);
 
     const handleSearch = (e: React.FormEvent) => {
@@ -68,6 +81,10 @@ const BankTransactionsIndex: React.FC<Props> = ({ transactions, bank_balance, fi
         setStartDate('');
         setEndDate('');
         router.get('/bank-transactions');
+    };
+
+    const formatCategoryName = (cat: string) => {
+        return cat.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
     const deleteTransaction = (id: number, description: string, referenceType: string | null) => {
@@ -132,7 +149,14 @@ const BankTransactionsIndex: React.FC<Props> = ({ transactions, bank_balance, fi
 
                         {showFilters && (
                             <div className="grid md:grid-cols-2 gap-4 pt-4 border-t">
-                                <select value={type} onChange={(e) => setType(e.target.value)} className="px-4 py-2 border rounded-lg">
+                                <select
+                                    value={type}
+                                    onChange={(e) => {
+                                        setType(e.target.value);
+                                        setCategory(''); // Reset category when type changes
+                                    }}
+                                    className="px-4 py-2 border rounded-lg"
+                                >
                                     <option value="">All Types</option>
                                     {transaction_types.map((t) => (
                                         <option key={t} value={t}>{t.toUpperCase()}</option>
@@ -140,8 +164,8 @@ const BankTransactionsIndex: React.FC<Props> = ({ transactions, bank_balance, fi
                                 </select>
                                 <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-4 py-2 border rounded-lg">
                                     <option value="">All Categories</option>
-                                    {categories.map((c) => (
-                                        <option key={c} value={c}>{c.replace('_', ' ').toUpperCase()}</option>
+                                    {currentCategories.map((c) => (
+                                        <option key={c} value={c}>{formatCategoryName(c)}</option>
                                     ))}
                                 </select>
                                 <input
@@ -202,8 +226,12 @@ const BankTransactionsIndex: React.FC<Props> = ({ transactions, bank_balance, fi
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                            {transaction.category.replace('_', ' ')}
+                                        <span className={`px-2 py-1 rounded text-xs ${
+                                            transaction.type === 'credit'
+                                                ? 'bg-green-100 text-green-700'
+                                                : 'bg-red-100 text-red-700'
+                                        }`}>
+                                            {formatCategoryName(transaction.category)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">

@@ -79,6 +79,7 @@ class DashboardController extends Controller
         $newCustomersThisMonth = Customer::where('tenant_id', $tenantId)
             ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
             ->count();
+        $totalCustomerDue = Customer::where('tenant_id', $tenantId)->sum('current_due');
 
         // Vendor Metrics
         $totalVendors = Vendor::where('tenant_id', $tenantId)->count();
@@ -244,7 +245,8 @@ class DashboardController extends Controller
                 ],
                 'customers' => [
                     'total' => $totalCustomers,
-                    'new_this_month' => $newCustomersThisMonth
+                    'new_this_month' => $newCustomersThisMonth,
+                    'total_due' => (float) $totalCustomerDue
                 ],
                 'vendors' => [
                     'total' => $totalVendors,

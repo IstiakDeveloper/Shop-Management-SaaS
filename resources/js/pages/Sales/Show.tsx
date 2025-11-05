@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/AppLayout';
+import PaymentModal from '@/components/PaymentModal';
 import { ArrowLeft, Edit2, CheckCircle, DollarSign, Package, User, Calendar, FileText, Printer } from 'lucide-react';
 
 interface Sale {
@@ -32,13 +33,7 @@ interface Props {
 }
 
 const SaleShow: React.FC<Props> = ({ sale, shouldPrintReceipt }) => {
-    const [showPaymentForm, setShowPaymentForm] = useState(false);
-
-    const { data, setData, post, processing, errors, reset } = useForm({
-        amount: '',
-        payment_method: 'cash',
-        payment_reference: '',
-    });
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
     // Auto-prompt for receipt printing if just created
     useEffect(() => {
@@ -85,18 +80,16 @@ const SaleShow: React.FC<Props> = ({ sale, shouldPrintReceipt }) => {
         }
     };
 
-    const handleAddPayment = (e: React.FormEvent) => {
-        e.preventDefault();
-        post(`/sales/${sale.id}/add-payment`, {
-            onSuccess: () => {
-                reset();
-                setShowPaymentForm(false);
-            },
-        });
-    };
-
     const printReceipt = () => {
         window.open(`/sales/${sale.id}/print`, '_blank');
+    };
+
+    const openPaymentModal = () => {
+        setPaymentModalOpen(true);
+    };
+
+    const closePaymentModal = () => {
+        setPaymentModalOpen(false);
     };
 
     return (
@@ -144,7 +137,7 @@ const SaleShow: React.FC<Props> = ({ sale, shouldPrintReceipt }) => {
                         )}
                         {getPaymentStatus(sale.paid, sale.total) !== 'paid' && sale.status === 'completed' && (
                             <button
-                                onClick={() => setShowPaymentForm(!showPaymentForm)}
+                                onClick={openPaymentModal}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
                             >
                                 <DollarSign className="w-4 h-4" />
@@ -181,67 +174,6 @@ const SaleShow: React.FC<Props> = ({ sale, shouldPrintReceipt }) => {
                         </div>
                     </div>
                 </div>
-
-                {/* Payment Form */}
-                {showPaymentForm && (
-                    <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Add Payment</h3>
-                        <form onSubmit={handleAddPayment} className="grid md:grid-cols-4 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Amount <span className="text-red-500">*</span></label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={data.amount}
-                                    onChange={(e) => setData('amount', e.target.value)}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                                    placeholder={`Max: ${sale.due}`}
-                                    max={sale.due}
-                                />
-                                {errors.amount && <p className="mt-1 text-sm text-red-600">{errors.amount}</p>}
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Method <span className="text-red-500">*</span></label>
-                                <select
-                                    value={data.payment_method}
-                                    onChange={(e) => setData('payment_method', e.target.value)}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                    <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="check">Check</option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Reference</label>
-                                <input
-                                    type="text"
-                                    value={data.payment_reference}
-                                    onChange={(e) => setData('payment_reference', e.target.value)}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                                />
-                            </div>
-                            <div className="flex items-end space-x-2">
-                                <button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                                >
-                                    {processing ? 'Adding...' : 'Add'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPaymentForm(false)}
-                                    className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
 
                 <div className="grid md:grid-cols-3 gap-6">
                     {/* Sale Information */}
@@ -354,6 +286,16 @@ const SaleShow: React.FC<Props> = ({ sale, shouldPrintReceipt }) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Payment Modal */}
+                <PaymentModal
+                    isOpen={paymentModalOpen}
+                    onClose={closePaymentModal}
+                    saleId={sale.id}
+                    invoiceNumber={sale.invoice_number}
+                    dueAmount={sale.due}
+                    totalAmount={sale.total}
+                />
             </div>
         </AppLayout>
     );

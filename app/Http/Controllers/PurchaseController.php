@@ -71,25 +71,50 @@ class PurchaseController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            'items.*.total_price' => 'nullable|numeric|min:0',
+            'items.*.use_total_price' => 'nullable|boolean',
         ]);
 
         try {
             DB::beginTransaction();
 
+            // Calculate subtotal from items
             $subtotal = 0;
+            $purchaseItems = [];
 
-            // Calculate subtotal
             foreach ($validated['items'] as $item) {
-                $subtotal += $item['quantity'] * $item['unit_price'];
+                // If frontend sends total_price, use it. Otherwise calculate from unit_price
+                if (isset($item['total_price']) && $item['total_price'] !== null && $item['total_price'] !== '') {
+                    // User entered total price - this is the exact amount
+                    $itemTotal = round((float)$item['total_price'], 2);
+                    // Recalculate unit price to match the exact total
+                    $unitPrice = round($itemTotal / (float)$item['quantity'], 6); // Keep more precision for unit price
+                } else {
+                    // User entered unit price - calculate total
+                    $unitPrice = round((float)$item['unit_price'], 2);
+                    $itemTotal = round((float)$item['quantity'] * $unitPrice, 2);
+                }
+
+                $subtotal += $itemTotal;
+
+                $purchaseItems[] = [
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $unitPrice,
+                    'total' => $itemTotal,
+                ];
             }
+
+            // Round subtotal to 2 decimal places
+            $subtotal = round($subtotal, 2);
 
             // Empty paid_amount means full payment
             $paidAmount = isset($validated['paid_amount']) && $validated['paid_amount'] !== ''
-                ? (float)$validated['paid_amount']
+                ? round((float)$validated['paid_amount'], 2)
                 : $subtotal;
 
-            $dueAmount = $subtotal - $paidAmount;
+            $dueAmount = round($subtotal - $paidAmount, 2);
 
             // Create purchase (always completed - product received)
             $purchase = Purchase::create([
@@ -107,16 +132,14 @@ class PurchaseController extends Controller
                 'due' => $dueAmount,
             ]);
 
-            // Create purchase items
-            foreach ($validated['items'] as $item) {
-                $itemTotal = $item['quantity'] * $item['unit_price'];
-
+            // Create purchase items with pre-calculated totals
+            foreach ($purchaseItems as $itemData) {
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total' => $itemTotal,
+                    'product_id' => $itemData['product_id'],
+                    'quantity' => $itemData['quantity'],
+                    'unit_price' => $itemData['unit_price'],
+                    'total' => $itemData['total'],
                 ]);
             }
 
@@ -205,7 +228,9 @@ class PurchaseController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
-            'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            'items.*.total_price' => 'nullable|numeric|min:0',
+            'items.*.use_total_price' => 'nullable|boolean',
         ]);
 
         try {
@@ -219,31 +244,46 @@ class PurchaseController extends Controller
 
             // Calculate new subtotal
             $subtotal = 0;
+            $purchaseItems = [];
+
             foreach ($validated['items'] as $item) {
-                $subtotal += $item['quantity'] * $item['unit_price'];
+                // If frontend sends total_price, use it. Otherwise calculate from unit_price
+                if (isset($item['total_price']) && $item['total_price'] !== null && $item['total_price'] !== '') {
+                    // User entered total price - this is the exact amount
+                    $itemTotal = round((float)$item['total_price'], 2);
+                    // Recalculate unit price to match the exact total
+                    $unitPrice = round($itemTotal / (float)$item['quantity'], 6); // Keep more precision for unit price
+                } else {
+                    // User entered unit price - calculate total
+                    $unitPrice = round((float)$item['unit_price'], 2);
+                    $itemTotal = round((float)$item['quantity'] * $unitPrice, 2);
+                }
+
+                $subtotal += $itemTotal;
+
+                $purchaseItems[] = [
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $unitPrice,
+                    'total' => $itemTotal,
+                ];
             }
 
-            // Empty paid_amount means full payment
+            // Round subtotal to 2 decimal places
+            $subtotal = round($subtotal, 2);            // Empty paid_amount means full payment
             $paidAmount = isset($validated['paid_amount']) && $validated['paid_amount'] !== ''
-                ? (float)$validated['paid_amount']
+                ? round((float)$validated['paid_amount'], 2)
                 : $subtotal;
 
-            $dueAmount = $subtotal - $paidAmount;
+            $dueAmount = round($subtotal - $paidAmount, 2);
 
-            // Reverse old stock entries
+            // Delete old stock entries for this purchase
+            StockEntry::where('reference_type', 'purchase')
+                ->where('reference_id', $purchase->id)
+                ->delete();
+
+            // Reverse stock summary for old items
             foreach ($purchase->purchaseItems as $oldItem) {
-                StockEntry::create([
-                    'tenant_id' => $purchase->tenant_id,
-                    'product_id' => $oldItem->product_id,
-                    'type' => 'adjustment',
-                    'quantity' => -$oldItem->quantity,
-                    'purchase_price' => $oldItem->unit_price,
-                    'entry_date' => now(),
-                    'reference_id' => $purchase->id,
-                    'reference_type' => 'purchase_update',
-                    'notes' => "Reversed for purchase update #{$purchase->invoice_number}",
-                ]);
-
                 StockSummary::updateStock(
                     $purchase->tenant_id,
                     $oldItem->product_id,
@@ -268,20 +308,18 @@ class PurchaseController extends Controller
                 'due' => $dueAmount,
             ]);
 
-            // Create new purchase items
-            foreach ($validated['items'] as $item) {
-                $itemTotal = $item['quantity'] * $item['unit_price'];
-
+            // Create new purchase items with pre-calculated totals
+            foreach ($purchaseItems as $itemData) {
                 PurchaseItem::create([
                     'purchase_id' => $purchase->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total' => $itemTotal,
+                    'product_id' => $itemData['product_id'],
+                    'quantity' => $itemData['quantity'],
+                    'unit_price' => $itemData['unit_price'],
+                    'total' => $itemData['total'],
                 ]);
             }
 
-            // Add new stock
+            // Add new stock with correct purchase_date
             $purchase->load('purchaseItems');
             $purchase->addToStock();
 

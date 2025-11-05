@@ -1,7 +1,8 @@
 import React from 'react';
 import { Head } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import SettingsNav from '../../components/settings-nav';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
@@ -10,19 +11,30 @@ import { Monitor, Sun, Moon, Palette } from 'lucide-react';
 export default function Appearance() {
     return (
         <AppLayout>
-            <Head title="Appearance Settings" />
+            <Head title="Appearance - Settings" />
 
             <div className="py-6">
-                <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-gray-900">Appearance Settings</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
                         <p className="text-gray-600 mt-1">
-                            Customize the look and feel of your application
+                            Manage your account and preferences
                         </p>
                     </div>
 
-                    <div className="grid gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* Settings Navigation */}
+                        <div className="lg:col-span-1">
+                            <Card>
+                                <CardContent className="p-4">
+                                    <SettingsNav currentPath="/settings/appearance" />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="lg:col-span-3 space-y-6">
                         {/* Theme Settings */}
                         <Card>
                             <CardHeader>
@@ -129,6 +141,7 @@ export default function Appearance() {
                                 </div>
                             </CardContent>
                         </Card>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -113,7 +113,7 @@ const mainNavItems: NavItem[] = [
 const footerNavItems: NavItem[] = [
     {
         title: 'Settings',
-        href: '/settings/profile',
+        href: '/settings/tenant-profile',
         icon: Settings,
     },
     {

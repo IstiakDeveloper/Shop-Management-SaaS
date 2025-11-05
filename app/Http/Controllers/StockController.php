@@ -59,7 +59,7 @@ class StockController extends Controller
         // Calculate total_value if it's 0 or null
         $stockItems->getCollection()->transform(function ($item) {
             if (!$item->total_value || $item->total_value == 0) {
-                $item->total_value = $item->total_qty * $item->avg_purchase_price;
+                $item->total_value = (float)$item->total_qty * (float)$item->avg_purchase_price;
             }
             return $item;
         });

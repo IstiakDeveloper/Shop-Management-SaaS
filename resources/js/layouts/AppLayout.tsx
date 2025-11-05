@@ -15,18 +15,28 @@ import {
     X,
     Bell,
     ChevronDown,
+    ChevronRight,
     Warehouse,
     ShoppingBag,
     Building2,
     Briefcase,
     Calculator,
+    FolderTree,
+    CreditCard,
+    Layers,
 } from 'lucide-react';
+
+interface SubMenuItem {
+    name: string;
+    href: string;
+}
 
 interface MenuItem {
     name: string;
-    href: string;
+    href?: string;
     icon: React.ComponentType<{ className?: string }>;
     badge?: number;
+    subItems?: SubMenuItem[];
 }
 
 interface AppLayoutProps {
@@ -36,31 +46,138 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [openDropdowns, setOpenDropdowns] = useState<{ [key: string]: boolean }>({});
     const { url, props } = usePage<any>();
     const user = props.auth?.user || { name: 'Admin User' };
+    const permissions = props.auth?.permissions || {};
+    const tenant = props.tenant || null;
     const bankBalance = props.bank_balance || 0;
 
     const formatCurrency = (amount: number) => {
         return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}`;
     };
 
-    const menuItems: MenuItem[] = [
-        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { name: 'Products', href: '/products', icon: Package },
-        { name: 'Stock', href: '/stock', icon: Warehouse },
-        { name: 'Purchases', href: '/purchases', icon: ShoppingCart },
-        { name: 'Sales', href: '/sales', icon: ShoppingBag },
-        { name: 'Customers', href: '/customers', icon: Users },
-        { name: 'Vendors', href: '/vendors', icon: Building2 },
-        { name: 'Bank', href: '/bank-transactions', icon: DollarSign },
-        { name: 'Expenses', href: '/expenses', icon: TrendingUp },
-        { name: 'Fixed Assets', href: '/fixed-assets', icon: Briefcase },
-        { name: 'Reports', href: '/reports', icon: FileText },
-        { name: 'Settings', href: '/settings/profile', icon: Settings },
-    ];
+    // Auto-expand dropdown if it contains active item
+    React.useEffect(() => {
+        const newOpenDropdowns: { [key: string]: boolean } = {};
+        menuItems.forEach((item) => {
+            if (item.subItems) {
+                const hasActiveChild = item.subItems.some((subItem) => url.startsWith(subItem.href));
+                if (hasActiveChild) {
+                    newOpenDropdowns[item.name] = true;
+                }
+            }
+        });
+        setOpenDropdowns(newOpenDropdowns);
+    }, [url]);
+
+    // Build menu items based on user permissions
+    const buildMenuItems = (): MenuItem[] => {
+        const items: MenuItem[] = [];
+
+        // Dashboard - Everyone can see
+        if (permissions.canViewDashboard) {
+            items.push({ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard });
+        }
+
+        // Inventory - Admin, Manager only
+        if (permissions.canManageInventory) {
+            items.push({
+                name: 'Inventory',
+                icon: Package,
+                subItems: [
+                    { name: 'Products', href: '/products' },
+                    { name: 'Product Categories', href: '/product-categories' },
+                    { name: 'Stock Management', href: '/stock' },
+                ],
+            });
+        }
+
+        // Purchases - Admin, Manager only
+        if (permissions.canManagePurchases) {
+            items.push({
+                name: 'Purchases',
+                icon: ShoppingCart,
+                subItems: [
+                    { name: 'Purchase Orders', href: '/purchases' },
+                    { name: 'Vendors', href: '/vendors' },
+                ],
+            });
+        }
+
+        // Sales - Everyone can see (includes POS)
+        if (permissions.canManageSales) {
+            items.push({
+                name: 'Sales',
+                icon: ShoppingBag,
+                subItems: [
+                    { name: 'Sales Orders', href: '/sales' },
+                    { name: 'Customers', href: '/customers' },
+                ],
+            });
+        }
+
+        // Accounting - Admin, Manager only
+        if (permissions.canManageAccounting) {
+            items.push({
+                name: 'Accounting',
+                icon: DollarSign,
+                subItems: [
+                    { name: 'Accounts', href: '/accounts' },
+                    { name: 'Bank Transactions', href: '/bank-transactions' },
+                    { name: 'Expenses', href: '/expenses' },
+                ],
+            });
+        }
+
+        // Fixed Assets - Admin, Manager only
+        if (permissions.canManageFixedAssets) {
+            items.push({ name: 'Fixed Assets', href: '/fixed-assets', icon: Briefcase });
+        }
+
+        // Reports - Admin, Manager only
+        if (permissions.canViewReports) {
+            items.push({
+                name: 'Reports',
+                icon: FileText,
+                subItems: [
+                    { name: 'Balance Sheet', href: '/reports/balance-sheet-report' },
+                    { name: 'Product Analysis', href: '/reports/product-analysis' },
+                    { name: 'Receipt & Payment', href: '/reports/receipt-payment' },
+                    { name: 'Income & Expenditure', href: '/reports/income-expenditure' },
+                    { name: 'Bank Report', href: '/reports/bank-report' },
+                ],
+            });
+        }
+
+        // Settings - Show different based on role
+        if (permissions.canManageSettings) {
+            // Admin sees business profile
+            items.push({ name: 'Settings', href: '/settings/tenant-profile', icon: Settings });
+        } else {
+            // Others see user profile
+            items.push({ name: 'Settings', href: '/settings/profile', icon: Settings });
+        }
+
+        return items;
+    };
+
+    const menuItems = buildMenuItems();
+
+    const toggleDropdown = (itemName: string) => {
+        setOpenDropdowns((prev) => ({
+            ...prev,
+            [itemName]: !prev[itemName],
+        }));
+    };
 
     const isActive = (href: string) => {
         return url.startsWith(href);
+    };
+
+    const isParentActive = (subItems?: SubMenuItem[]) => {
+        if (!subItems) return false;
+        return subItems.some((subItem) => url.startsWith(subItem.href));
     };
 
     return (
@@ -71,22 +188,46 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     sidebarOpen ? 'w-64' : 'w-20'
                 } hidden md:flex flex-col bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 text-white transition-all duration-300 ease-in-out shadow-2xl`}
             >
-                {/* Logo Section */}
+                {/* Logo Section - Tenant Branding */}
                 <div className="flex items-center justify-between h-16 px-4 border-b border-indigo-700/50">
                     {sidebarOpen ? (
                         <Link href="/" className="flex items-center space-x-3 group">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-                                <TrendingUp className="w-6 h-6 text-indigo-600" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold tracking-tight">ShopFlow</h1>
-                                <p className="text-xs text-indigo-200">Management System</p>
+                            {tenant?.logo ? (
+                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg overflow-hidden transform group-hover:scale-110 transition-transform">
+                                    <img
+                                        src={`/storage/${tenant.logo}`}
+                                        alt={tenant.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                                    <Building2 className="w-6 h-6 text-indigo-600" />
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <h1 className="text-lg font-bold tracking-tight truncate">
+                                    {tenant?.name || 'ShopFlow'}
+                                </h1>
+                                <p className="text-xs text-indigo-200 truncate">
+                                    {tenant?.business_type || 'Management System'}
+                                </p>
                             </div>
                         </Link>
                     ) : (
-                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg mx-auto">
-                            <TrendingUp className="w-6 h-6 text-indigo-600" />
-                        </div>
+                        tenant?.logo ? (
+                            <div className="w-10 h-10 bg-white rounded-lg shadow-lg mx-auto overflow-hidden">
+                                <img
+                                    src={`/storage/${tenant.logo}`}
+                                    alt={tenant.name}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        ) : (
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg mx-auto">
+                                <Building2 className="w-6 h-6 text-indigo-600" />
+                            </div>
+                        )
                     )}
                 </div>
 
@@ -109,11 +250,62 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
                     {menuItems.map((item) => {
                         const Icon = item.icon;
-                        const active = isActive(item.href);
+                        const hasSubItems = item.subItems && item.subItems.length > 0;
+                        const isOpen = openDropdowns[item.name];
+                        const active = item.href ? isActive(item.href) : isParentActive(item.subItems);
+
+                        if (hasSubItems) {
+                            return (
+                                <div key={item.name} className="space-y-1">
+                                    <button
+                                        onClick={() => toggleDropdown(item.name)}
+                                        className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
+                                            active
+                                                ? 'bg-white/10 text-white'
+                                                : 'text-indigo-100 hover:bg-indigo-700/50 hover:text-white'
+                                        }`}
+                                    >
+                                        <Icon
+                                            className={`w-5 h-5 ${
+                                                sidebarOpen ? 'mr-3' : 'mx-auto'
+                                            }`}
+                                        />
+                                        {sidebarOpen && (
+                                            <>
+                                                <span className="font-medium flex-1 text-left text-sm">{item.name}</span>
+                                                <ChevronDown
+                                                    className={`w-4 h-4 transition-transform duration-200 ${
+                                                        isOpen ? 'rotate-180' : ''
+                                                    }`}
+                                                />
+                                            </>
+                                        )}
+                                    </button>
+                                    {sidebarOpen && isOpen && (
+                                        <div className="ml-8 space-y-0.5 py-1 border-l-2 border-indigo-700/50 pl-3">
+                                            {item.subItems?.map((subItem) => (
+                                                <Link
+                                                    key={subItem.href}
+                                                    href={subItem.href}
+                                                    className={`flex items-center px-3 py-2 rounded-md text-sm transition-all duration-150 ${
+                                                        isActive(subItem.href)
+                                                            ? 'bg-white text-indigo-600 font-medium shadow-sm'
+                                                            : 'text-indigo-200 hover:bg-indigo-700/30 hover:text-white'
+                                                    }`}
+                                                >
+                                                    <span className="truncate">{subItem.name}</span>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+
                         return (
                             <Link
                                 key={item.name}
-                                href={item.href}
+                                href={item.href!}
                                 className={`flex items-center px-3 py-3 rounded-xl transition-all duration-200 group relative ${
                                     active
                                         ? 'bg-white text-indigo-600 shadow-lg'
@@ -145,20 +337,47 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     })}
                 </nav>
 
-                {/* User Section */}
-                <div className="border-t border-indigo-700/50 p-4">
+                {/* User & Tenant Section */}
+                <div className="border-t border-indigo-700/50 p-4 space-y-3">
                     {sidebarOpen ? (
-                        <div className="flex items-center space-x-3 mb-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center font-bold text-sm shadow-lg">
-                                {user.name.charAt(0)}
+                        <>
+                            {/* Tenant Contact Info */}
+                            {tenant && (
+                                <div className="bg-indigo-800/30 rounded-lg p-3 mb-2">
+                                    <p className="text-xs font-semibold text-indigo-200 mb-1.5">Business Contact</p>
+                                    {tenant.phone && (
+                                        <p className="text-xs text-white mb-1 flex items-center">
+                                            <span className="mr-1">📞</span>
+                                            {tenant.phone}
+                                        </p>
+                                    )}
+                                    {tenant.email && (
+                                        <p className="text-xs text-white truncate flex items-center">
+                                            <span className="mr-1">📧</span>
+                                            {tenant.email}
+                                        </p>
+                                    )}
+                                    {tenant.address && (
+                                        <p className="text-xs text-indigo-200 mt-1.5 line-clamp-2">
+                                            📍 {tenant.address}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* User Info */}
+                            <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center font-bold text-sm shadow-lg">
+                                    {user.name.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">{user.name}</p>
+                                    <p className="text-xs text-indigo-200 truncate">Administrator</p>
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">{user.name}</p>
-                                <p className="text-xs text-indigo-200 truncate">Admin</p>
-                            </div>
-                        </div>
+                        </>
                     ) : (
-                        <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center font-bold text-sm shadow-lg mx-auto mb-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center font-bold text-sm shadow-lg mx-auto">
                             {user.name.charAt(0)}
                         </div>
                     )}
@@ -188,15 +407,29 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                         onClick={() => setMobileMenuOpen(false)}
                     ></div>
                     <aside className="fixed inset-y-0 left-0 w-64 bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 text-white z-50 md:hidden transform transition-transform duration-300 shadow-2xl">
-                        {/* Mobile Header */}
+                        {/* Mobile Header - Tenant Branding */}
                         <div className="flex items-center justify-between h-16 px-4 border-b border-indigo-700/50">
                             <Link href="/" className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
-                                    <TrendingUp className="w-6 h-6 text-indigo-600" />
-                                </div>
-                                <div>
-                                    <h1 className="text-xl font-bold">ShopFlow</h1>
-                                    <p className="text-xs text-indigo-200">Management</p>
+                                {tenant?.logo ? (
+                                    <div className="w-10 h-10 bg-white rounded-lg shadow-lg overflow-hidden">
+                                        <img
+                                            src={`/storage/${tenant.logo}`}
+                                            alt={tenant.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                                        <Building2 className="w-6 h-6 text-indigo-600" />
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <h1 className="text-lg font-bold truncate">
+                                        {tenant?.name || 'ShopFlow'}
+                                    </h1>
+                                    <p className="text-xs text-indigo-200 truncate">
+                                        {tenant?.business_type || 'Management'}
+                                    </p>
                                 </div>
                             </Link>
                             <button
@@ -221,11 +454,55 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
                             {menuItems.map((item) => {
                                 const Icon = item.icon;
-                                const active = isActive(item.href);
+                                const hasSubItems = item.subItems && item.subItems.length > 0;
+                                const isOpen = openDropdowns[item.name];
+                                const active = item.href ? isActive(item.href) : isParentActive(item.subItems);
+
+                                if (hasSubItems) {
+                                    return (
+                                        <div key={item.name} className="space-y-1">
+                                            <button
+                                                onClick={() => toggleDropdown(item.name)}
+                                                className={`w-full flex items-center px-3 py-2.5 rounded-lg transition-all ${
+                                                    active
+                                                        ? 'bg-white/10 text-white'
+                                                        : 'text-indigo-100 hover:bg-indigo-700/50'
+                                                }`}
+                                            >
+                                                <Icon className="w-5 h-5 mr-3" />
+                                                <span className="font-medium flex-1 text-left text-sm">{item.name}</span>
+                                                <ChevronDown
+                                                    className={`w-4 h-4 transition-transform duration-200 ${
+                                                        isOpen ? 'rotate-180' : ''
+                                                    }`}
+                                                />
+                                            </button>
+                                            {isOpen && (
+                                                <div className="ml-8 space-y-0.5 py-1 border-l-2 border-indigo-700/50 pl-3">
+                                                    {item.subItems?.map((subItem) => (
+                                                        <Link
+                                                            key={subItem.href}
+                                                            href={subItem.href}
+                                                            className={`flex items-center px-3 py-2 rounded-md text-sm transition-all duration-150 ${
+                                                                isActive(subItem.href)
+                                                                    ? 'bg-white text-indigo-600 font-medium shadow-sm'
+                                                                    : 'text-indigo-200 hover:bg-indigo-700/30 hover:text-white'
+                                                            }`}
+                                                            onClick={() => setMobileMenuOpen(false)}
+                                                        >
+                                                            <span className="truncate">{subItem.name}</span>
+                                                        </Link>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
                                 return (
                                     <Link
                                         key={item.name}
-                                        href={item.href}
+                                        href={item.href!}
                                         className={`flex items-center px-3 py-3 rounded-xl transition-all ${
                                             active
                                                 ? 'bg-white text-indigo-600 shadow-lg'
@@ -262,10 +539,25 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                                 <Menu className="w-6 h-6 text-gray-600" />
                             </button>
 
-                            {/* App Title for Context */}
-                            <div className="hidden sm:block">
-                                <h2 className="text-lg font-semibold text-gray-800">Shop Management</h2>
-                                <p className="text-xs text-gray-500">Complete Business Solution</p>
+                            {/* Tenant Info Display */}
+                            <div className="hidden sm:flex items-center space-x-3">
+                                {tenant?.logo && (
+                                    <div className="w-10 h-10 bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
+                                        <img
+                                            src={`/storage/${tenant.logo}`}
+                                            alt={tenant.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </div>
+                                )}
+                                <div>
+                                    <h2 className="text-lg font-semibold text-gray-800">
+                                        {tenant?.name || 'Shop Management'}
+                                    </h2>
+                                    <p className="text-xs text-gray-500">
+                                        {tenant?.business_type || 'Complete Business Solution'}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -280,11 +572,18 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                                 <span className="hidden sm:inline">POS</span>
                             </Link>
 
+                            {/* Tenant Quick Info (Mobile) */}
+                            {tenant && (
+                                <div className="hidden md:flex lg:hidden items-center px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-200">
+                                    <Building2 className="w-4 h-4 text-indigo-600" />
+                                </div>
+                            )}
+
                             {/* Bank Balance - Important Info */}
                             <div className="hidden lg:flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
                                 <DollarSign className="w-5 h-5 text-green-600" />
                                 <div>
-                                    <p className="text-xs text-gray-600">Balance</p>
+                                    <p className="text-xs text-gray-600">Bank Balance</p>
                                     <p className="text-sm font-bold text-green-700">{formatCurrency(bankBalance)}</p>
                                 </div>
                             </div>
@@ -295,11 +594,25 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                             </button>
 
+                            {/* Tenant Settings Quick Link */}
+                            {tenant && (
+                                <Link
+                                    href="/settings/tenant-profile"
+                                    className="hidden xl:flex items-center space-x-2 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors border border-indigo-200"
+                                    title="Business Profile Settings"
+                                >
+                                    <Building2 className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Business</span>
+                                </Link>
+                            )}
+
                             {/* User Profile */}
                             <div className="hidden md:flex items-center space-x-3 pl-3 border-l border-gray-200">
                                 <div className="text-right">
                                     <p className="text-sm font-medium text-gray-700">{user.name}</p>
-                                    <p className="text-xs text-gray-500">Administrator</p>
+                                    <p className="text-xs text-gray-500">
+                                        {tenant?.name ? `${tenant.name}` : 'Administrator'}
+                                    </p>
                                 </div>
                                 <div className="w-9 h-9 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center font-bold text-white shadow-lg cursor-pointer hover:scale-110 transition-transform">
                                     {user.name.charAt(0)}
@@ -322,7 +635,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
                 {/* Main Content */}
                 <main className="flex-1 overflow-y-auto bg-gray-50">
-                    <div className="container mx-auto px-4 py-6 animate-fadeIn">
+                    <div className="container mx-auto px-4 py-6">
                         {children}
                     </div>
                 </main>
@@ -332,36 +645,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <FlashMessage />
 
             <style>{`
-                @keyframes fadeIn {
-                    from {
-                        opacity: 0;
-                        transform: translateY(10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-
-                @keyframes slideIn {
-                    from {
-                        opacity: 0;
-                        transform: translateX(100%);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateX(0);
-                    }
-                }
-
-                .animate-fadeIn {
-                    animation: fadeIn 0.3s ease-out;
-                }
-
-                .animate-slide-in {
-                    animation: slideIn 0.3s ease-out;
-                }
-
                 .scrollbar-thin::-webkit-scrollbar {
                     width: 6px;
                 }

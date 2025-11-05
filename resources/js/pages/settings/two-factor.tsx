@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import SettingsNav from '../../components/settings-nav';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -113,19 +114,30 @@ export default function TwoFactor() {
 
     return (
         <AppLayout>
-            <Head title="Two-Factor Authentication" />
+            <Head title="Two-Factor Authentication - Settings" />
 
             <div className="py-6">
-                <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-gray-900">Two-Factor Authentication</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
                         <p className="text-gray-600 mt-1">
-                            Add additional security to your account using two-factor authentication
+                            Manage your account and preferences
                         </p>
                     </div>
 
-                    <div className="grid gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* Settings Navigation */}
+                        <div className="lg:col-span-1">
+                            <Card>
+                                <CardContent className="p-4">
+                                    <SettingsNav currentPath="/settings/two-factor" />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="lg:col-span-3 space-y-6">
                         {/* Current Status */}
                         <Card>
                             <CardHeader>
@@ -336,6 +348,7 @@ export default function TwoFactor() {
                                 </div>
                             </CardContent>
                         </Card>
+                        </div>
                     </div>
                 </div>
             </div>

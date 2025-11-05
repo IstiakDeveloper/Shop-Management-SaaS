@@ -3,214 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Balance Sheet - {{ $company_name }}</title>
+    <title>Balance Sheet - {{ $tenant->name ?? 'Shop Management' }}</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'DejaVu Sans', sans-serif;
-            font-size: 12px;
-            margin: 0;
-            padding: 20px;
-            line-height: 1.4;
-            color: #333;
+            font-size: 10px;
+            padding: 15px;
+            line-height: 1.3;
+            color: #000;
         }
         .header {
             text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #000;
         }
         .company-name {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+        }
+        .company-info {
+            font-size: 9px;
+            color: #333;
+            margin-bottom: 8px;
         }
         .report-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
         }
         .date-range {
-            font-size: 12px;
-            color: #666;
+            font-size: 9px;
+            color: #555;
         }
         .balance-sheet-container {
             display: table;
             width: 100%;
-            margin-top: 20px;
+            margin-top: 12px;
         }
         .assets-column, .liabilities-column {
             display: table-cell;
             width: 50%;
             vertical-align: top;
-            padding: 0 10px;
+            padding: 0 5px;
         }
         .section-title {
-            font-size: 14px;
+            font-size: 11px;
             font-weight: bold;
             text-align: center;
-            margin-bottom: 15px;
-            padding: 8px;
-            background-color: #f8f9fa;
-            border: 1px solid #ddd;
-        }
-        .assets-title {
-            background-color: #e3f2fd;
-            border-color: #2196f3;
-            color: #1976d2;
-        }
-        .liabilities-title {
-            background-color: #f3e5f5;
-            border-color: #9c27b0;
-            color: #7b1fa2;
+            margin-bottom: 8px;
+            padding: 5px;
+            background-color: #000;
+            color: #fff;
+            text-transform: uppercase;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
         }
-        th, td {
-            padding: 8px;
-            text-align: left;
+        td {
+            padding: 5px 6px;
             border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #f5f5f5;
-            font-weight: bold;
+            font-size: 10px;
         }
         .amount {
             text-align: right;
-            font-weight: bold;
+            font-family: 'DejaVu Sans', monospace;
         }
         .total-row {
-            border-top: 2px solid #333;
-            background-color: #f8f9fa;
+            border-top: 2px solid #000;
+            border-bottom: 2px double #000;
+            background-color: #f0f0f0;
             font-weight: bold;
-        }
-        .assets-total {
-            color: #1976d2;
-        }
-        .liabilities-total {
-            color: #7b1fa2;
         }
         .balance-check {
-            margin-top: 30px;
-            padding: 15px;
+            margin-top: 15px;
+            padding: 8px;
             text-align: center;
-            border: 2px solid #4caf50;
-            background-color: #e8f5e8;
-            color: #2e7d32;
+            border: 1px solid #000;
+            background-color: #f9f9f9;
             font-weight: bold;
+            font-size: 10px;
         }
-        .balance-warning {
-            border-color: #ff9800;
-            background-color: #fff3e0;
-            color: #e65100;
-        }
-        .currency {
-            font-family: 'DejaVu Sans', sans-serif;
-        }
-        .page-break {
-            page-break-after: always;
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 8px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="company-name">{{ $company_name }}</div>
+        <div class="company-name">{{ $tenant->name ?? 'Shop Management' }}</div>
+        @if($tenant)
+        <div class="company-info">
+            @if($tenant->address) {{ $tenant->address }} | @endif
+            @if($tenant->phone) Phone: {{ $tenant->phone }} | @endif
+            @if($tenant->email) Email: {{ $tenant->email }} @endif
+        </div>
+        @endif
         <div class="report-title">Balance Sheet</div>
         <div class="date-range">As at {{ $month_name }} {{ $year }}</div>
     </div>
 
     <div class="balance-sheet-container">
         <div class="assets-column">
-            <div class="section-title assets-title">ASSETS</div>
+            <div class="section-title">Property & Assets</div>
             <table>
                 <tbody>
-                    <!-- Current Assets -->
-                    <tr style="background-color: #f5f5f5;">
-                        <td><strong>Current Assets</strong></td>
-                        <td class="amount"></td>
+                    <tr>
+                        <td>Bank Balance</td>
+                        <td class="amount">{{ number_format($assets['bank_balance'], 2) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding-left: 20px;">Cash at Bank</td>
-                        <td class="amount currency">Tk {{ number_format($assets['current_assets']['cash_at_bank'], 2) }}</td>
+                        <td>Customer Due</td>
+                        <td class="amount">{{ number_format($assets['customer_due'], 2) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding-left: 20px;">Stock/Inventory</td>
-                        <td class="amount currency">Tk {{ number_format($assets['current_assets']['stock_value'], 2) }}</td>
+                        <td>Fixed Assets</td>
+                        <td class="amount">{{ number_format($assets['fixed_assets'], 2) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding-left: 20px;">Customer Due</td>
-                        <td class="amount currency">Tk {{ number_format($assets['current_assets']['customer_due'], 2) }}</td>
+                        <td>Stock Value</td>
+                        <td class="amount">{{ number_format($assets['stock_value'], 2) }}</td>
                     </tr>
-                    <tr style="background-color: #e8f4fd; font-weight: bold;">
-                        <td>Total Current Assets</td>
-                        <td class="amount currency"><strong>Tk {{ number_format($assets['current_assets']['total'], 2) }}</strong></td>
-                    </tr>                    <!-- Fixed Assets -->
-                    <tr style="background-color: #f5f5f5;">
-                        <td><strong>Fixed Assets</strong></td>
-                        <td class="amount"></td>
-                    </tr>
-                    @foreach($assets['fixed_assets']['items'] as $asset)
-                    <tr>
-                        <td style="padding-left: 20px;">{{ $asset['name'] }}</td>
-                        <td class="amount currency">Tk {{ number_format($asset['value'], 2) }}</td>
-                    </tr>
-                    @endforeach
-                    <tr style="background-color: #e3f2fd;">
-                        <td style="padding-left: 20px;"><strong>Total Fixed Assets</strong></td>
-                        <td class="amount currency"><strong>Tk {{ number_format($assets['fixed_assets']['total'], 2) }}</strong></td>
-                    </tr>
-
-                    <tr class="total-row assets-total">
+                    <tr class="total-row">
                         <td><strong>TOTAL ASSETS</strong></td>
-                        <td class="amount currency"><strong>Tk {{ number_format($assets['total_assets'], 2) }}</strong></td>
+                        <td class="amount"><strong>{{ number_format($assets['total'], 2) }}</strong></td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
         <div class="liabilities-column">
-            <div class="section-title liabilities-title">LIABILITIES & EQUITY</div>
+            <div class="section-title">Fund & Liabilities</div>
             <table>
                 <tbody>
-                    <!-- Liabilities -->
-                    <tr style="background-color: #f5f5f5;">
-                        <td><strong>Liabilities</strong></td>
-                        <td class="amount"></td>
+                    <tr>
+                        <td>Fund</td>
+                        <td class="amount">{{ number_format($liabilities['fund'], 2) }}</td>
+                    </tr>
+                    @php
+                        $totalProfit = $liabilities['profit'] + $liabilities['net_profit'];
+                    @endphp
+                    <tr>
+                        <td>Profit</td>
+                        <td class="amount">{{ number_format($totalProfit, 2) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding-left: 20px;">Accounts Payable</td>
-                        <td class="amount currency">Tk {{ number_format($liabilities_equity['liabilities']['accounts_payable'], 2) }}</td>
-                    </tr>
-                    <tr style="background-color: #f3e5f5;">
-                        <td style="padding-left: 20px;"><strong>Total Liabilities</strong></td>
-                        <td class="amount currency"><strong>Tk {{ number_format($liabilities_equity['liabilities']['total'], 2) }}</strong></td>
-                    </tr>
-
-                    <!-- Equity -->
-                    <tr style="background-color: #f5f5f5;">
-                        <td><strong>Equity</strong></td>
-                        <td class="amount"></td>
+                        <td>&nbsp;</td>
+                        <td class="amount">&nbsp;</td>
                     </tr>
                     <tr>
-                        <td style="padding-left: 20px;">Opening Capital</td>
-                        <td class="amount currency">Tk {{ number_format($liabilities_equity['equity']['opening_capital'], 2) }}</td>
+                        <td>&nbsp;</td>
+                        <td class="amount">&nbsp;</td>
                     </tr>
-                    <tr>
-                        <td style="padding-left: 20px;">Net Profit</td>
-                        <td class="amount currency {{ $liabilities_equity['equity']['net_profit'] >= 0 ? '' : 'text-red' }}">
-                            Tk {{ number_format($liabilities_equity['equity']['net_profit'], 2) }}
-                        </td>
-                    </tr>
-                    <tr style="background-color: #f3e5f5;">
-                        <td style="padding-left: 20px;"><strong>Total Equity</strong></td>
-                        <td class="amount currency"><strong>Tk {{ number_format($liabilities_equity['equity']['total'], 2) }}</strong></td>
-                    </tr>
-
-                    <tr class="total-row liabilities-total">
-                        <td><strong>TOTAL LIABILITIES & EQUITY</strong></td>
-                        <td class="amount currency"><strong>Tk {{ number_format($liabilities_equity['total_liabilities_equity'], 2) }}</strong></td>
+                    <tr class="total-row">
+                        <td><strong>TOTAL LIABILITIES</strong></td>
+                        <td class="amount"><strong>{{ number_format($liabilities['total'], 2) }}</strong></td>
                     </tr>
                 </tbody>
             </table>
@@ -218,19 +175,19 @@
     </div>
 
     @php
-        $difference = abs($assets['total_assets'] - $liabilities_equity['total_liabilities_equity']);
+        $difference = abs($assets['total'] - $liabilities['total']);
         $isBalanced = $difference < 0.01;
     @endphp
 
-    <div class="balance-check {{ $isBalanced ? '' : 'balance-warning' }}">
+    <div class="balance-check">
         @if($isBalanced)
-            ✓ Balance Sheet is Balanced - Assets equal Liabilities & Equity
+            Balance Sheet is Balanced
         @else
-            ⚠ Balance Sheet is NOT Balanced - Difference: Tk {{ number_format($difference, 2) }}
+            Difference: {{ number_format($difference, 2) }}
         @endif
     </div>
 
-    <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #666;">
+    <div class="footer">
         Generated on {{ date('d M Y, h:i A') }}
     </div>
 </body>

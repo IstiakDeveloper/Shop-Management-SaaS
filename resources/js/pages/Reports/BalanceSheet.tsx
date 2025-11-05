@@ -1,57 +1,26 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { ArrowLeft, BarChart3, Printer, Download } from 'lucide-react';
-
-interface CurrentAssets {
-    cash_at_bank: number;
-    stock_value: number;
-    customer_due: number;
-    total: number;
-}
-
-interface FixedAsset {
-    name: string;
-    value: number;
-}
-
-interface FixedAssets {
-    items: FixedAsset[];
-    total: number;
-}
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 
 interface Assets {
-    current_assets: CurrentAssets;
-    fixed_assets: FixedAssets;
-    total_assets: number;
+    bank_balance: number;
+    customer_due: number;
+    fixed_assets: number;
+    stock_value: number;
+    total: number;
 }
 
 interface Liabilities {
-    accounts_payable: number;
-    total: number;
-}
-
-interface Equity {
-    opening_capital: number;
+    fund: number;
+    profit: number;
     net_profit: number;
     total: number;
 }
 
-interface LiabilitiesEquity {
-    liabilities: Liabilities;
-    equity: Equity;
-    total_liabilities_equity: number;
-    calculations?: {
-        total_sales: number;
-        total_purchases: number;
-        total_expenses: number;
-        vendor_payments: number;
-    };
-}
-
 interface Props {
     assets: Assets;
-    liabilities_equity: LiabilitiesEquity;
+    liabilities: Liabilities;
     year: number;
     month: number;
     month_name: string;
@@ -60,7 +29,7 @@ interface Props {
 
 const BalanceSheet: React.FC<Props> = ({
     assets,
-    liabilities_equity,
+    liabilities,
     year,
     month,
     month_name,
@@ -70,7 +39,7 @@ const BalanceSheet: React.FC<Props> = ({
     const [currentMonth, setCurrentMonth] = useState(month);
 
     const formatCurrency = (amount: number) => {
-        return `৳${amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}`;
+        return amount.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const handleFilter = (newYear?: number, newMonth?: number) => {
@@ -99,13 +68,14 @@ const BalanceSheet: React.FC<Props> = ({
         window.open(`/reports/balance-sheet-report/export?year=${currentYear}&month=${currentMonth}`, '_blank');
     };
 
-    const isBalanced = Math.abs(assets.total_assets - liabilities_equity.total_liabilities_equity) < 0.01;
+    const isBalanced = Math.abs(assets.total - liabilities.total) < 0.01;
+    const difference = Math.abs(assets.total - liabilities.total);
 
     return (
         <AppLayout>
             <Head title="Balance Sheet" />
 
-            <div className="max-w-6xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Balance Sheet</h1>
@@ -170,110 +140,99 @@ const BalanceSheet: React.FC<Props> = ({
                     </div>
                 </div>
 
+                {/* Balance Sheet Tables - Side by Side */}
                 <div className="grid lg:grid-cols-2 gap-6">
-                    {/* Assets Side */}
-                    <div className="bg-white rounded-xl shadow-sm border p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center space-x-2">
-                            <BarChart3 className="w-5 h-5 text-blue-600" />
-                            <span>Assets</span>
-                        </h2>
-
-                        {/* Current Assets */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Current Assets</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Cash at Bank</span>
-                                    <span className="text-blue-600 font-semibold">{formatCurrency(assets.current_assets.cash_at_bank)}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Stock/Inventory</span>
-                                    <span className="text-blue-600 font-semibold">{formatCurrency(assets.current_assets.stock_value)}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Customer Due</span>
-                                    <span className="text-blue-600 font-semibold">{formatCurrency(assets.current_assets.customer_due)}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 bg-blue-50 px-3 rounded">
-                                    <span className="font-semibold text-blue-800">Total Current Assets</span>
-                                    <span className="font-semibold text-blue-800">{formatCurrency(assets.current_assets.total)}</span>
-                                </div>
-                            </div>
+                    {/* Fund & Liabilities */}
+                    <div className="bg-white rounded-xl shadow-sm border">
+                        <div className="bg-gray-50 px-6 py-4 border-b">
+                            <h2 className="text-xl font-bold text-gray-900">Fund & Liabilities</h2>
                         </div>
-
-                        {/* Fixed Assets */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Fixed Assets</h3>
-                            <div className="space-y-3">
-                                {assets.fixed_assets.items.map((asset, index) => (
-                                    <div key={index} className="flex items-center justify-between py-2 border-b">
-                                        <span className="font-medium text-gray-700">{asset.name}</span>
-                                        <span className="text-blue-600 font-semibold">{formatCurrency(asset.value)}</span>
-                                    </div>
-                                ))}
-                                <div className="flex items-center justify-between py-2 bg-blue-50 px-3 rounded">
-                                    <span className="font-semibold text-blue-800">Total Fixed Assets</span>
-                                    <span className="font-semibold text-blue-800">{formatCurrency(assets.fixed_assets.total)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 pt-4 border-t-2 border-blue-600 bg-blue-50 rounded-lg p-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-lg font-bold text-blue-800">Total Assets</span>
-                                <span className="text-2xl font-bold text-blue-800">{formatCurrency(assets.total_assets)}</span>
-                            </div>
+                        <div className="p-6">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 font-semibold">Description</th>
+                                        <th className="text-right py-3 font-semibold">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr className="border-b">
+                                        <td className="py-3">Fund</td>
+                                        <td className="py-3 text-right text-green-600 font-medium">
+                                            {formatCurrency(liabilities.fund)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">Profit</td>
+                                        <td className={`py-3 text-right font-medium ${(liabilities.profit + liabilities.net_profit) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {formatCurrency(liabilities.profit + liabilities.net_profit)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">&nbsp;</td>
+                                        <td className="py-3 text-right">&nbsp;</td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">&nbsp;</td>
+                                        <td className="py-3 text-right">&nbsp;</td>
+                                    </tr>
+                                    <tr className="border-t-2 border-gray-800">
+                                        <td className="py-3 font-bold">Total</td>
+                                        <td className="py-3 text-right font-bold text-lg">
+                                            {formatCurrency(liabilities.total)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    {/* Liabilities & Equity Side */}
-                    <div className="bg-white rounded-xl shadow-sm border p-6">
-                        <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center space-x-2">
-                            <BarChart3 className="w-5 h-5 text-purple-600" />
-                            <span>Liabilities & Equity</span>
-                        </h2>
-
-                        {/* Liabilities */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Liabilities</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Accounts Payable</span>
-                                    <span className="text-red-600 font-semibold">{formatCurrency(liabilities_equity.liabilities.accounts_payable)}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 bg-red-50 px-3 rounded">
-                                    <span className="font-semibold text-red-800">Total Liabilities</span>
-                                    <span className="font-semibold text-red-800">{formatCurrency(liabilities_equity.liabilities.total)}</span>
-                                </div>
-                            </div>
+                    {/* Property & Assets */}
+                    <div className="bg-white rounded-xl shadow-sm border">
+                        <div className="bg-gray-50 px-6 py-4 border-b">
+                            <h2 className="text-xl font-bold text-gray-900">Property & Assets</h2>
                         </div>
-
-                        {/* Equity */}
-                        <div className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-3">Equity</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Opening Capital</span>
-                                    <span className="text-purple-600 font-semibold">{formatCurrency(liabilities_equity.equity.opening_capital)}</span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 border-b">
-                                    <span className="font-medium text-gray-700">Net Profit</span>
-                                    <span className={`font-semibold ${liabilities_equity.equity.net_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {formatCurrency(liabilities_equity.equity.net_profit)}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between py-2 bg-purple-50 px-3 rounded">
-                                    <span className="font-semibold text-purple-800">Total Equity</span>
-                                    <span className="font-semibold text-purple-800">{formatCurrency(liabilities_equity.equity.total)}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 pt-4 border-t-2 border-purple-600 bg-purple-50 rounded-lg p-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-lg font-bold text-purple-800">Total Liabilities & Equity</span>
-                                <span className="text-2xl font-bold text-purple-800">{formatCurrency(liabilities_equity.total_liabilities_equity)}</span>
-                            </div>
+                        <div className="p-6">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 font-semibold">Description</th>
+                                        <th className="text-right py-3 font-semibold">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr className="border-b">
+                                        <td className="py-3">Bank Balance</td>
+                                        <td className="py-3 text-right text-blue-600 font-medium">
+                                            {formatCurrency(assets.bank_balance)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">Customer Due</td>
+                                        <td className="py-3 text-right text-blue-600 font-medium">
+                                            {formatCurrency(assets.customer_due)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">Fixed Assets</td>
+                                        <td className="py-3 text-right text-blue-600 font-medium">
+                                            {formatCurrency(assets.fixed_assets)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="py-3">Stock Value</td>
+                                        <td className="py-3 text-right text-blue-600 font-medium">
+                                            {formatCurrency(assets.stock_value)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-t-2 border-gray-800">
+                                        <td className="py-3 font-bold">Total</td>
+                                        <td className="py-3 text-right font-bold text-lg">
+                                            {formatCurrency(assets.total)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -287,18 +246,18 @@ const BalanceSheet: React.FC<Props> = ({
                             </h3>
                             {isBalanced ? (
                                 <p className="text-green-600 font-medium mt-1">
-                                    ✅ Assets equal Liabilities & Equity - Balance sheet is balanced!
+                                    ✅ Assets equal Liabilities - Balance sheet is balanced!
                                 </p>
                             ) : (
                                 <p className="text-yellow-600 font-medium mt-1">
-                                    ⚠️ Assets do not equal Liabilities & Equity - Difference: {formatCurrency(Math.abs(assets.total_assets - liabilities_equity.total_liabilities_equity))}
+                                    ⚠️ Assets do not equal Liabilities - Difference: {formatCurrency(difference)}
                                 </p>
                             )}
                         </div>
                         <div className="text-right">
                             <p className="text-sm text-gray-600">Difference</p>
                             <p className={`text-2xl font-bold ${isBalanced ? 'text-green-600' : 'text-yellow-600'}`}>
-                                {formatCurrency(Math.abs(assets.total_assets - liabilities_equity.total_liabilities_equity))}
+                                {formatCurrency(difference)}
                             </p>
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
 import { Button } from '../../components/ui/button';
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
-import { Download, FileText, Printer } from 'lucide-react';
+import { Download, FileText, Printer, Search, X, Filter } from 'lucide-react';
 
 interface Product {
     id: number;
@@ -33,6 +33,8 @@ interface Product {
 
 interface Totals {
     total_purchase: number | string;
+    total_sale_subtotal?: number | string;
+    total_sale_discount?: number | string;
     total_sale: number | string;
     total_profit: number | string;
     profit_margin: number | string;
@@ -55,39 +57,75 @@ export default function ProductReport({ products, totals, filters }: Props) {
     const [searchTerm, setSearchTerm] = useState(filters.search);
     const [startDate, setStartDate] = useState(filters.start_date);
     const [endDate, setEndDate] = useState(filters.end_date);
+    const [dateError, setDateError] = useState('');
+    const [isFiltering, setIsFiltering] = useState(false);
+    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const handleFilter = (newSearchTerm?: string, newStartDate?: string, newEndDate?: string) => {
-        const filterSearch = newSearchTerm !== undefined ? newSearchTerm : searchTerm;
-        const filterStartDate = newStartDate || startDate;
-        const filterEndDate = newEndDate || endDate;
+    // Validate dates whenever they change
+    useEffect(() => {
+        if (startDate && endDate && startDate > endDate) {
+            setDateError('End date must be after start date');
+        } else {
+            setDateError('');
+        }
+    }, [startDate, endDate]);
 
+    const handleFilter = () => {
+        // Validate dates before filtering
+        if (startDate && endDate && startDate > endDate) {
+            setDateError('End date must be after start date');
+            return;
+        }
+
+        setIsFiltering(true);
         router.get('/reports/product-analysis', {
-            search: filterSearch,
-            start_date: filterStartDate,
-            end_date: filterEndDate,
+            search: searchTerm,
+            start_date: startDate,
+            end_date: endDate,
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => setIsFiltering(false),
         });
     };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newSearchTerm = e.target.value;
         setSearchTerm(newSearchTerm);
-        // Add a small delay for search to avoid too many requests
-        setTimeout(() => {
-            handleFilter(newSearchTerm, startDate, endDate);
+
+        // Clear existing timeout
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        // Debounced search - only for search field
+        searchTimeoutRef.current = setTimeout(() => {
+            router.get('/reports/product-analysis', {
+                search: newSearchTerm,
+                start_date: startDate,
+                end_date: endDate,
+            }, {
+                preserveState: true,
+                preserveScroll: true,
+            });
         }, 500);
     };
 
-    const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newStartDate = e.target.value;
-        setStartDate(newStartDate);
-        handleFilter(searchTerm, newStartDate, endDate);
+    const handleClearFilters = () => {
+        setSearchTerm('');
+        setStartDate('');
+        setEndDate('');
+        setDateError('');
+
+        router.get('/reports/product-analysis', {
+            search: '',
+            start_date: '',
+            end_date: '',
+        });
     };
 
-    const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newEndDate = e.target.value;
-        setEndDate(newEndDate);
-        handleFilter(searchTerm, startDate, newEndDate);
-    };
+    // Check if filters are active
+    const hasActiveFilters = searchTerm || startDate || endDate;
 
     const handleExport = (type: 'excel' | 'pdf') => {
         if (type === 'pdf') {
@@ -152,38 +190,138 @@ export default function ProductReport({ products, totals, filters }: Props) {
                         </div>
                     </div>
                     {/* Filter Section */}
-                    <Card className="mb-6">
-                        <CardHeader>
-                            <CardTitle>Filters</CardTitle>
+                    <Card className="mb-6 shadow-sm">
+                        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Filter className="w-5 h-5 text-blue-600" />
+                                    <CardTitle className="text-lg">Filter Options</CardTitle>
+                                </div>
+                                {hasActiveFilters && (
+                                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                                        Filters Active
+                                    </Badge>
+                                )}
+                            </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <Label htmlFor="start_date">Start Date</Label>
-                                    <Input
-                                        id="start_date"
-                                        type="date"
-                                        value={startDate}
-                                        onChange={handleStartDateChange}
-                                    />
+                        <CardContent className="pt-6">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {/* Start Date */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="start_date" className="text-sm font-medium flex items-center gap-1">
+                                            Start Date
+                                        </Label>
+                                        <Input
+                                            id="start_date"
+                                            type="date"
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                            className={`transition-all ${dateError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                        />
+                                    </div>
+
+                                    {/* End Date */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="end_date" className="text-sm font-medium flex items-center gap-1">
+                                            End Date
+                                        </Label>
+                                        <Input
+                                            id="end_date"
+                                            type="date"
+                                            value={endDate}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                            className={`transition-all ${dateError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                                        />
+                                    </div>
+
+                                    {/* Search */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="search" className="text-sm font-medium flex items-center gap-1">
+                                            <Search className="w-4 h-4" />
+                                            Search Products
+                                        </Label>
+                                        <div className="relative">
+                                            <Input
+                                                id="search"
+                                                placeholder="Product name or code..."
+                                                value={searchTerm}
+                                                onChange={handleSearchChange}
+                                                className="pr-8"
+                                            />
+                                            {searchTerm && (
+                                                <button
+                                                    onClick={() => {
+                                                        setSearchTerm('');
+                                                        if (searchTimeoutRef.current) {
+                                                            clearTimeout(searchTimeoutRef.current);
+                                                        }
+                                                        router.get('/reports/product-analysis', {
+                                                            search: '',
+                                                            start_date: startDate,
+                                                            end_date: endDate,
+                                                        });
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <Label htmlFor="end_date">End Date</Label>
-                                    <Input
-                                        id="end_date"
-                                        type="date"
-                                        value={endDate}
-                                        onChange={handleEndDateChange}
-                                    />
-                                </div>
-                                <div>
-                                    <Label htmlFor="search">Search Products</Label>
-                                    <Input
-                                        id="search"
-                                        placeholder="Product name or code..."
-                                        value={searchTerm}
-                                        onChange={handleSearchChange}
-                                    />
+
+                                {/* Error Message */}
+                                {dateError && (
+                                    <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-200">
+                                        <span className="font-medium">⚠</span>
+                                        <span>{dateError}</span>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-3 pt-2 border-t">
+                                    <Button
+                                        onClick={handleFilter}
+                                        disabled={!!dateError || isFiltering}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isFiltering ? (
+                                            <>
+                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Filtering...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Filter className="w-4 h-4 mr-2" />
+                                                Apply Filters
+                                            </>
+                                        )}
+                                    </Button>
+                                    {hasActiveFilters && (
+                                        <Button
+                                            onClick={handleClearFilters}
+                                            variant="outline"
+                                            className="border-gray-300 hover:bg-gray-50"
+                                        >
+                                            <X className="w-4 h-4 mr-2" />
+                                            Clear All
+                                        </Button>
+                                    )}
+                                    {(startDate || endDate) && (
+                                        <span className="text-sm text-gray-500 ml-2">
+                                            {startDate && endDate ? (
+                                                <>Period: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</>
+                                            ) : startDate ? (
+                                                <>From: {new Date(startDate).toLocaleDateString()}</>
+                                            ) : (
+                                                <>Until: {new Date(endDate).toLocaleDateString()}</>
+                                            )}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>
@@ -326,10 +464,10 @@ export default function ProductReport({ products, totals, filters }: Props) {
                                                 </td>
                                                 <td className="px-2 py-3 text-center border-r">-</td>
                                                 <td className="px-2 py-3 text-center border-r">
-                                                    {formatCurrency(totals.total_sale)}
+                                                    {formatCurrency(totals.total_sale_subtotal || products.reduce((sum, p) => sum + Number(p.sale_subtotal || 0), 0))}
                                                 </td>
                                                 <td className="px-2 py-3 text-center border-r text-red-600">
-                                                    {formatCurrency(products.reduce((sum, p) => sum + Number(p.sale_discount || 0), 0))}
+                                                    {formatCurrency(totals.total_sale_discount || products.reduce((sum, p) => sum + Number(p.sale_discount || 0), 0))}
                                                 </td>
                                                 <td className="px-2 py-3 text-center border-r">
                                                     {formatCurrency(totals.total_sale)}

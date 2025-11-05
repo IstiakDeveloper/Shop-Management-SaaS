@@ -164,6 +164,9 @@ class ReceiptPaymentController extends Controller
 
         $tenantId = Auth::user()->tenant_id;
 
+        // Get tenant information
+        $tenant = \App\Models\Tenant::find($tenantId);
+
         // Get opening balance
         $openingBalance = $this->getOpeningBalance($tenantId, $startDate);
 
@@ -177,7 +180,7 @@ class ReceiptPaymentController extends Controller
             'payments' => $payments,
             'start_date' => $startDate->format('d M Y'),
             'end_date' => $endDate->format('d M Y'),
-            'company_name' => 'Your Company Name',
+            'tenant' => $tenant,
         ]);
 
         return $pdf->stream('receipt-payment-report-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf');

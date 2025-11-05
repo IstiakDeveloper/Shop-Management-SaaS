@@ -50,12 +50,25 @@ class BankTransactionController extends Controller
         $bankAccount = Account::getBankAccount(Auth::user()->tenant_id);
         $bankBalance = $bankAccount ? $bankAccount->current_balance : 0;
 
+        // Calculate category-wise totals
+        $creditCategories = ['opening', 'fund_in', 'profit', 'others_income', 'sale', 'customer_payment'];
+        $debitCategories = ['expense', 'fund_out', 'office_maintenance', 'asset', 'purchase', 'vendor_payment'];
+
+        $categorySummary = [];
+        foreach (array_merge($creditCategories, $debitCategories) as $cat) {
+            $categorySummary[$cat] = BankTransaction::where('tenant_id', Auth::user()->tenant_id)
+                ->where('category', $cat)
+                ->sum('amount');
+        }
+
         return Inertia::render('BankTransactions/Index', [
             'transactions' => $transactions,
             'bank_balance' => $bankBalance,
             'filters' => $request->only(['search', 'type', 'category', 'start_date', 'end_date']),
             'transaction_types' => ['credit', 'debit'],
-            'categories' => ['opening', 'sale', 'purchase', 'expense', 'fixed_asset', 'vendor_payment', 'customer_payment', 'adjustment'],
+            'credit_categories' => $creditCategories,
+            'debit_categories' => $debitCategories,
+            'category_summary' => $categorySummary,
         ]);
     }
 
@@ -67,7 +80,8 @@ class BankTransactionController extends Controller
         return Inertia::render('BankTransactions/Create', [
             'bank_balance' => $bankBalance,
             'transaction_types' => ['credit', 'debit'],
-            'categories' => ['opening', 'sale', 'purchase', 'expense', 'fixed_asset', 'vendor_payment', 'customer_payment', 'adjustment'],
+            'credit_categories' => ['opening', 'fund_in', 'profit', 'others_income', 'sale', 'customer_payment'],
+            'debit_categories' => ['expense', 'fund_out', 'office_maintenance', 'asset', 'purchase', 'vendor_payment'],
         ]);
     }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import AppLayout from '@/Layouts/AppLayout';
+import AppLayout from '@/layouts/AppLayout';
 import {
     DollarSign,
     ShoppingCart,
@@ -31,6 +31,7 @@ interface DashboardProps {
         customers: {
             total: number;
             new_this_month: number;
+            total_due: number;
         };
         vendors: {
             total: number;
@@ -251,7 +252,7 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics, charts, alerts, recent }
                 </div>
 
                 {/* Financial Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {/* Cash Balance Card */}
                     <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-lg">
                         <div className="flex items-center justify-between mb-4">
@@ -276,6 +277,20 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics, charts, alerts, recent }
                         <p className="text-green-100 text-sm">Current inventory value</p>
                     </div>
 
+                    {/* Customer Due Card */}
+                    <div className="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl p-6 text-white shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">Customer Due</h3>
+                            <Users className="w-6 h-6" />
+                        </div>
+                        <p className="text-3xl font-bold mb-2">
+                            {formatCurrency(metrics.customers.total_due)}
+                        </p>
+                        <p className="text-blue-100 text-sm">
+                            Receivable from {metrics.customers.total} customers
+                        </p>
+                    </div>
+
                     {/* Vendor Due Card */}
                     <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-6 text-white shadow-lg">
                         <div className="flex items-center justify-between mb-4">
@@ -286,7 +301,7 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics, charts, alerts, recent }
                             {formatCurrency(metrics.vendors.total_due)}
                         </p>
                         <p className="text-orange-100 text-sm">
-                            Payment due to {metrics.vendors.total} vendors
+                            Payable to {metrics.vendors.total} vendors
                         </p>
                     </div>
                 </div>

@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class BalanceSheetController extends Controller
@@ -28,12 +29,12 @@ class BalanceSheetController extends Controller
         // Assets calculation
         $assets = $this->calculateAssets($tenantId, $endDate);
 
-        // Liabilities & Equity calculation
-        $liabilitiesEquity = $this->calculateLiabilitiesEquity($tenantId, $endDate);
+        // Liabilities calculation
+        $liabilities = $this->calculateLiabilitiesEquity($tenantId, $endDate);
 
         return Inertia::render('Reports/BalanceSheet', [
             'assets' => $assets,
-            'liabilities_equity' => $liabilitiesEquity,
+            'liabilities' => $liabilities,
             'year' => $year,
             'month' => $month,
             'month_name' => $endDate->format('F'),
@@ -43,114 +44,77 @@ class BalanceSheetController extends Controller
 
     private function calculateAssets(int $tenantId, Carbon $endDate): array
     {
-        // 1. Current Assets
-        // Cash at Bank - Get from Account model
-        $bankAccount = Account::where('tenant_id', $tenantId)
-            ->where('type', 'bank')
-            ->first();
-        $cashAtBank = $bankAccount ? (float)$bankAccount->current_balance : 0;
+        // 1. Bank Balance - Get month-wise balance from bank transactions
+        $bankBalance = $this->getBankBalance($tenantId, $endDate);
 
-        // 2. Stock Value - Current inventory value
-        $stockValue = StockSummary::where('tenant_id', $tenantId)
-            ->selectRaw('SUM(total_qty * avg_purchase_price) as total_value')
-            ->value('total_value') ?? 0;
+        // 2. Customer Due - Outstanding amounts from sales (more accurate)
+        $customerDue = DB::table('sales')
+            ->where('tenant_id', $tenantId)
+            ->where('sale_date', '<=', $endDate->toDateString())
+            ->sum('due') ?? 0;
 
-        // 3. Fixed Assets - Get from Account model
-        $fixedAssets = Account::where('tenant_id', $tenantId)
-            ->where('type', 'fixed_asset')
-            ->get(['name', 'current_balance'])
-            ->map(function ($asset) {
-                return [
-                    'name' => $asset->name,
-                    'value' => (float)$asset->current_balance
-                ];
-            });
+        // 3. Fixed Assets - From bank transactions with category 'fixed_asset'
+        $fixedAssets = BankTransaction::where('tenant_id', $tenantId)
+            ->where('category', 'fixed_asset')
+            ->where('type', 'debit')
+            ->where('transaction_date', '<=', $endDate->toDateString())
+            ->sum('amount') ?? 0;
 
-        $totalFixedAssets = $fixedAssets->sum('value');
+        // 4. Stock Value - Using ProductReport accurate calculation logic (date-based)
+        $stockValue = $this->calculateAccurateStockValue($tenantId, $endDate);
 
-        // 4. Customer Due - Outstanding amounts from customers (if any)
-        $customerDue = Customer::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->sum('current_due') ?? 0;
-
-        // Calculate totals
-        $currentAssets = $cashAtBank + $stockValue + $customerDue;
-        $totalAssets = $currentAssets + $totalFixedAssets;
+        // Calculate Total Assets
+        $totalAssets = $bankBalance + $customerDue + $fixedAssets + $stockValue;
 
         return [
-            'current_assets' => [
-                'cash_at_bank' => (float)$cashAtBank,
-                'stock_value' => (float)$stockValue,
-                'customer_due' => (float)$customerDue,
-                'total' => (float)$currentAssets,
-            ],
-            'fixed_assets' => [
-                'items' => $fixedAssets->toArray(),
-                'total' => (float)$totalFixedAssets,
-            ],
-            'total_assets' => (float)$totalAssets,
+            'bank_balance' => (float)$bankBalance,
+            'customer_due' => (float)$customerDue,
+            'fixed_assets' => (float)$fixedAssets,
+            'stock_value' => (float)$stockValue,
+            'total' => (float)$totalAssets,
         ];
     }
 
     private function calculateLiabilitiesEquity(int $tenantId, Carbon $endDate): array
     {
-        // 1. Opening Capital - From opening transactions
-        $openingCapital = BankTransaction::where('tenant_id', $tenantId)
-            ->where('category', 'opening')
+        // ========== FUND & LIABILITIES ==========
+
+        // 1. Fund = Total Fund In - Fund Out
+        $fundIn = BankTransaction::where('tenant_id', $tenantId)
+            ->where('category', 'fund_in')
             ->where('type', 'credit')
             ->where('transaction_date', '<=', $endDate->toDateString())
             ->sum('amount') ?? 0;
 
-        // 2. Calculate Net Profit/Loss for the period
-        // Revenue (Sales)
-        $totalSales = BankTransaction::where('tenant_id', $tenantId)
-            ->where('category', 'sale')
+        $fundOut = BankTransaction::where('tenant_id', $tenantId)
+            ->where('category', 'fund_out')
+            ->where('type', 'debit')
+            ->where('transaction_date', '<=', $endDate->toDateString())
+            ->sum('amount') ?? 0;
+
+        $netFund = $fundIn - $fundOut;
+
+        // 2. Profit Category - From bank transactions
+        $profitCategory = BankTransaction::where('tenant_id', $tenantId)
+            ->where('category', 'profit')
             ->where('type', 'credit')
             ->where('transaction_date', '<=', $endDate->toDateString())
             ->sum('amount') ?? 0;
 
-        // Expenses (Purchase + Vendor Payments + Expenses)
-        $totalPurchases = BankTransaction::where('tenant_id', $tenantId)
-            ->where('category', 'purchase')
-            ->where('type', 'debit')
-            ->where('transaction_date', '<=', $endDate->toDateString())
-            ->sum('amount') ?? 0;
+        // 3. Net Profit = Income - Expenditure (Cumulative from year start)
+        $cumulativeStart = Carbon::create($endDate->year, 1, 1)->startOfMonth();
+        $cumulativeIncome = $this->calculateCumulativeIncome($tenantId, $cumulativeStart, $endDate);
+        $cumulativeExpenditure = $this->calculateCumulativeExpenditure($tenantId, $cumulativeStart, $endDate);
+        $netProfit = $cumulativeIncome - $cumulativeExpenditure;
 
-        $totalExpenses = BankTransaction::where('tenant_id', $tenantId)
-            ->where('category', 'expense')
-            ->where('type', 'debit')
-            ->where('transaction_date', '<=', $endDate->toDateString())
-            ->sum('amount') ?? 0;
-
-        $netProfit = $totalSales - $totalPurchases - $totalExpenses;
-
-        // 3. Accounts Payable - Get actual vendor due amounts
-        $accountsPayable = Vendor::where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->sum('current_due') ?? 0;
-
-        // Total Equity
-        $totalEquity = $openingCapital + $netProfit;
-        $totalLiabilitiesEquity = $accountsPayable + $totalEquity;
+        // Total Fund & Liabilities
+        $totalLiabilities = $netFund + $profitCategory + $netProfit;
 
         return [
-            'liabilities' => [
-                'accounts_payable' => (float)$accountsPayable,
-                'total' => (float)$accountsPayable,
-            ],
-            'equity' => [
-                'opening_capital' => (float)$openingCapital,
-                'net_profit' => (float)$netProfit,
-                'total' => (float)$totalEquity,
-            ],
-            'total_liabilities_equity' => (float)$totalLiabilitiesEquity,
-            // Debug info
-            'calculations' => [
-                'total_sales' => (float)$totalSales,
-                'total_purchases' => (float)$totalPurchases,
-                'total_expenses' => (float)$totalExpenses,
-                'accounts_payable_from_vendors' => (float)$accountsPayable,
-            ]
+            'fund' => (float)$netFund,
+            'profit' => (float)$profitCategory,
+            'net_profit' => (float)$netProfit,
+            'total' => (float)$totalLiabilities,
         ];
     }
 
@@ -238,6 +202,232 @@ class BalanceSheetController extends Controller
         return (float)$netProfit;
     }
 
+    private function calculateCumulativeIncome(int $tenantId, Carbon $startDate, Carbon $endDate): float
+    {
+        // Use PRODUCT-LEVEL calculation from ProductReportController for accuracy
+        $products = \App\Models\Product::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->get();
+
+        $totalSalesProfit = 0.0;
+
+        foreach ($products as $product) {
+            // Get purchase data for the period
+            $purchaseData = \App\Models\PurchaseItem::join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+                ->where('purchase_items.product_id', $product->id)
+                ->where('purchases.tenant_id', $tenantId)
+                ->whereBetween('purchases.purchase_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->selectRaw('
+                    CAST(SUM(purchase_items.quantity) AS DECIMAL(15,6)) as total_purchase_qty,
+                    CAST(SUM(purchase_items.total) AS DECIMAL(15,6)) as total_purchase_value
+                ')
+                ->first();
+
+            // Get sale data for the period
+            $saleData = \App\Models\SaleItem::join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->where('sale_items.product_id', $product->id)
+                ->where('sales.tenant_id', $tenantId)
+                ->whereBetween('sales.sale_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->selectRaw('
+                    CAST(SUM(sale_items.quantity) AS DECIMAL(15,6)) as total_sale_qty,
+                    CAST(SUM(sale_items.total) AS DECIMAL(15,6)) as sale_subtotal
+                ')
+                ->first();
+
+            // Calculate proportional discount
+            $productDiscount = DB::table('sale_items')
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->where('sale_items.product_id', $product->id)
+                ->where('sales.tenant_id', $tenantId)
+                ->whereBetween('sales.sale_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->selectRaw('
+                    CAST(SUM(
+                        CASE
+                            WHEN sales.subtotal > 0
+                            THEN (sale_items.total / sales.subtotal) * sales.discount
+                            ELSE 0
+                        END
+                    ) AS DECIMAL(15,6)) as product_discount
+                ')
+                ->value('product_discount') ?? 0;
+
+            $purchaseQty = (float)($purchaseData->total_purchase_qty ?? 0);
+            $saleQty = (float)($saleData->total_sale_qty ?? 0);
+            $purchaseTotal = (float)($purchaseData->total_purchase_value ?? 0);
+            $saleSubtotal = (float)($saleData->sale_subtotal ?? 0);
+            $saleDiscount = (float)$productDiscount;
+            $saleTotal = $saleSubtotal - $saleDiscount;
+
+            // Skip if no sales
+            if ($saleQty <= 0) {
+                continue;
+            }
+
+            // Get stock information
+            $stockSummary = $product->stockSummary;
+            $currentStock = $stockSummary ? (float)$stockSummary->total_qty : 0;
+            $avgPurchasePrice = $stockSummary ? (float)$stockSummary->avg_purchase_price : 0;
+
+            // Calculate before stock
+            $beforeStock = $currentStock - $purchaseQty + $saleQty;
+            $beforeStock = max(0, $beforeStock);
+
+            // Calculate before stock value
+            $beforeStockValue = 0.0;
+            $beforeStockPrice = 0.0;
+
+            if ($beforeStock > 0) {
+                $stockBeforePeriod = DB::table('stock_entries')
+                    ->where('product_id', $product->id)
+                    ->where('tenant_id', $tenantId)
+                    ->where('entry_date', '<', $startDate->toDateString())
+                    ->selectRaw('
+                        CAST(SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END) AS DECIMAL(15,6)) as total_in,
+                        CAST(SUM(CASE WHEN quantity > 0 THEN quantity * purchase_price ELSE 0 END) AS DECIMAL(15,6)) as total_value
+                    ')
+                    ->first();
+
+                $totalIn = (float)($stockBeforePeriod->total_in ?? 0);
+                if ($totalIn > 0) {
+                    $totalValue = (float)($stockBeforePeriod->total_value ?? 0);
+                    $beforeStockPrice = $totalValue / $totalIn;
+                    $beforeStockValue = $beforeStock * $beforeStockPrice;
+                } else {
+                    $beforeStockPrice = $avgPurchasePrice;
+                    $beforeStockValue = $beforeStock * $beforeStockPrice;
+                }
+            }
+
+            // Calculate ACCURATE cost of sales using weighted average (SAME AS ProductReportController)
+            $totalAvailableQty = $beforeStock + $purchaseQty;
+            $totalAvailableValue = $beforeStockValue + $purchaseTotal;
+
+            $weightedAvgCost = $totalAvailableQty > 0 ? $totalAvailableValue / $totalAvailableQty : 0;
+            $totalCostOfSales = $saleQty * $weightedAvgCost;
+            $totalProfit = $saleTotal - $totalCostOfSales;
+
+            $totalSalesProfit += $totalProfit;
+        }
+
+        // Other Income from bank transactions
+        $otherIncome = BankTransaction::where('tenant_id', $tenantId)
+            ->where('type', 'credit')
+            ->whereNotIn('category', ['sale', 'customer_payment', 'profit', 'fund_in', 'fund_out', 'fixed_asset'])
+            ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->sum('amount') ?? 0;
+
+        return $totalSalesProfit + $otherIncome;
+    }
+
+    private function calculateCumulativeExpenditure(int $tenantId, Carbon $startDate, Carbon $endDate): float
+    {
+        // All expenses except excluded categories
+        $totalExpenditure = BankTransaction::where('tenant_id', $tenantId)
+            ->where('type', 'debit')
+            ->whereNotIn('category', ['profit', 'fund_in', 'fund_out', 'fixed_asset', 'purchase', 'vendor_payment'])
+            ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->sum('amount') ?? 0;
+
+        return $totalExpenditure;
+    }
+
+    private function calculateAccurateStockValue(int $tenantId, Carbon $endDate): float
+    {
+        // Calculate stock value using ProductReport's accurate method
+        // Formula: Available Stock Value = Before Stock Value + Purchases - Cost of Sales
+
+        $yearStart = Carbon::create($endDate->year, 1, 1)->startOfMonth();
+
+        $products = \App\Models\Product::where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->with('stockSummary')
+            ->get();
+
+        $totalStockValue = 0.0;
+
+        foreach ($products as $product) {
+            $productId = $product->id;
+
+            // Get current stock
+            $stockSummary = $product->stockSummary;
+            if (!$stockSummary) {
+                continue;
+            }
+
+            $currentQty = (float)$stockSummary->total_qty;
+            $avgPurchasePrice = (float)$stockSummary->avg_purchase_price;
+
+            // Get period purchases (year start to end date) with high precision
+            $periodPurchases = DB::table('purchase_items')
+                ->join('purchases', 'purchase_items.purchase_id', '=', 'purchases.id')
+                ->where('purchase_items.product_id', $productId)
+                ->where('purchases.tenant_id', $tenantId)
+                ->whereBetween('purchases.purchase_date', [$yearStart->toDateString(), $endDate->toDateString()])
+                ->selectRaw('CAST(SUM(purchase_items.quantity) AS DECIMAL(15,6)) as purchase_qty, CAST(SUM(purchase_items.total) AS DECIMAL(15,6)) as purchase_value')
+                ->first();
+
+            $purchaseQty = (float)($periodPurchases->purchase_qty ?? 0);
+            $purchaseValue = (float)($periodPurchases->purchase_value ?? 0);
+
+            // Get period sales
+            $periodSales = DB::table('sale_items')
+                ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+                ->where('sale_items.product_id', $productId)
+                ->where('sales.tenant_id', $tenantId)
+                ->whereBetween('sales.sale_date', [$yearStart->toDateString(), $endDate->toDateString()])
+                ->sum('sale_items.quantity');
+
+            $saleQty = (float)($periodSales ?? 0);
+
+            // Calculate before stock
+            $beforeStockQty = $currentQty - $purchaseQty + $saleQty;
+            $beforeStockQty = max(0, $beforeStockQty);
+
+            // Calculate before stock value with high precision
+            $beforeStockValue = 0.0;
+            $beforeStockPrice = 0.0;
+
+            if ($beforeStockQty > 0) {
+                $stockBeforePeriod = DB::table('stock_entries')
+                    ->where('product_id', $productId)
+                    ->where('tenant_id', $tenantId)
+                    ->where('entry_date', '<', $yearStart->toDateString())
+                    ->selectRaw('
+                        CAST(SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END) AS DECIMAL(15,6)) as total_in,
+                        CAST(SUM(CASE WHEN quantity > 0 THEN quantity * purchase_price ELSE 0 END) AS DECIMAL(15,6)) as total_value
+                    ')
+                    ->first();
+
+                $totalIn = (float)($stockBeforePeriod->total_in ?? 0);
+                if ($totalIn > 0) {
+                    $totalValue = (float)($stockBeforePeriod->total_value ?? 0);
+                    $beforeStockPrice = $totalValue / $totalIn;
+                    $beforeStockValue = $beforeStockQty * $beforeStockPrice;
+                } else {
+                    // Fallback to stock summary avg if no stock entries found
+                    $beforeStockPrice = $avgPurchasePrice;
+                    $beforeStockValue = $beforeStockQty * $avgPurchasePrice;
+                }
+            }
+
+            // Calculate weighted average cost with high precision
+            $totalAvailableQty = $beforeStockQty + $purchaseQty;
+            $totalAvailableValue = $beforeStockValue + $purchaseValue;
+            $weightedAvgCost = $totalAvailableQty > 0 ? ($totalAvailableValue / $totalAvailableQty) : 0.0;
+
+            // Calculate cost of sales
+            $costOfSales = $saleQty * $weightedAvgCost;
+
+            // Available Stock Value = Before Stock Value + Purchase Value - Cost of Sales
+            $availableStockValue = $beforeStockValue + $purchaseValue - $costOfSales;
+
+            $totalStockValue += $availableStockValue;
+        }
+
+        return $totalStockValue;
+    }
+
+
     public function export(Request $request)
     {
         $year = $request->input('year', Carbon::now()->year);
@@ -246,18 +436,21 @@ class BalanceSheetController extends Controller
         $endDate = Carbon::create($year, $month, 1)->endOfMonth();
         $tenantId = Auth::user()->tenant_id;
 
+        // Get tenant information
+        $tenant = \App\Models\Tenant::find($tenantId);
+
         // Get data
         $assets = $this->calculateAssets($tenantId, $endDate);
-        $liabilitiesEquity = $this->calculateLiabilitiesEquity($tenantId, $endDate);
+        $liabilities = $this->calculateLiabilitiesEquity($tenantId, $endDate);
 
         // Generate PDF
         $pdf = Pdf::loadView('reports.balance-sheet-pdf', [
             'assets' => $assets,
-            'liabilities_equity' => $liabilitiesEquity,
+            'liabilities' => $liabilities,
             'month_name' => $endDate->format('F'),
             'year' => $year,
             'end_date' => $endDate->format('d M Y'),
-            'company_name' => 'Your Company Name',
+            'tenant' => $tenant,
         ]);
 
         return $pdf->stream('balance-sheet-' . $endDate->format('Y-m') . '.pdf');

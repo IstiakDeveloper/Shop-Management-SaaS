@@ -45,11 +45,20 @@ class SaleController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Date filtering
+        if ($request->has('date_from')) {
+            $query->whereDate('sale_date', '>=', $request->date_from);
+        }
+
+        if ($request->has('date_to')) {
+            $query->whereDate('sale_date', '<=', $request->date_to);
+        }
+
         $sales = $query->orderBy('sale_date', 'desc')->paginate(20);
 
         return Inertia::render('Sales/Index', [
             'sales' => $sales,
-            'filters' => $request->only(['search', 'status']),
+            'filters' => $request->only(['search', 'status', 'date_from', 'date_to']),
         ]);
     }
 
@@ -202,19 +211,36 @@ class SaleController extends Controller
     public function addPayment(Request $request, Sale $sale): RedirectResponse
     {
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:0.01|max:' . $sale->due,
             'payment_method' => 'required|in:cash,card,mobile,bank',
+            'payment_reference' => 'nullable|string|max:255',
         ]);
 
         try {
+            DB::beginTransaction();
+
+            // Add payment to sale
             $sale->addPayment(
                 $validated['amount'],
                 $validated['payment_method']
             );
 
-            return back()->with('success', 'Payment added successfully. Bank account updated.');
+            // Update customer due if customer exists
+            if ($sale->customer_id) {
+                $customer = Customer::find($sale->customer_id);
+                if ($customer) {
+                    // Reduce customer due by payment amount
+                    $customer->current_due = max(0, $customer->current_due - $validated['amount']);
+                    $customer->save();
+                }
+            }
+
+            DB::commit();
+
+            return back()->with('success', 'Payment added successfully. Customer due and bank account updated.');
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return back()->withErrors(['error' => 'Failed to add payment: ' . $e->getMessage()]);
         }
     }

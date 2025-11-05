@@ -1,28 +1,30 @@
 import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../layouts/AppLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import SettingsNav from '../../components/settings-nav';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
 import { User, Mail, Phone, MapPin, Calendar, Trash2 } from 'lucide-react';
 
-interface ProfileData {
-    name: string;
-    email: string;
-    phone: string;
-    address: string;
-    company: string;
+interface Props {
+    user: {
+        id: number;
+        name: string;
+        email: string;
+        role?: string;
+        created_at: string;
+    };
+    mustVerifyEmail?: boolean;
+    status?: string;
 }
 
-export default function Profile() {
-    const [data, setData] = useState<ProfileData>({
-        name: 'Admin User',
-        email: 'admin@shopmanagement.com',
-        phone: '+880 1234567890',
-        address: 'Dhaka, Bangladesh',
-        company: 'Shop Management System',
+export default function Profile({ user }: Props) {
+    const [data, setData] = useState({
+        name: user.name || '',
+        email: user.email || '',
     });
     const [processing, setProcessing] = useState(false);
     const [recentlySuccessful, setRecentlySuccessful] = useState(false);
@@ -68,19 +70,30 @@ export default function Profile() {
 
     return (
         <AppLayout>
-            <Head title="Profile Settings" />
+            <Head title="User Profile - Settings" />
 
             <div className="py-6">
-                <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-6">
-                        <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
+                        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
                         <p className="text-gray-600 mt-1">
-                            Update your account information and manage your profile
+                            Manage your account and preferences
                         </p>
                     </div>
 
-                    <div className="grid gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        {/* Settings Navigation */}
+                        <div className="lg:col-span-1">
+                            <Card>
+                                <CardContent className="p-4">
+                                    <SettingsNav currentPath="/settings/profile" />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="lg:col-span-3 space-y-6">
                         {/* Profile Information */}
                         <Card>
                             <CardHeader>
@@ -91,7 +104,7 @@ export default function Profile() {
                             </CardHeader>
                             <CardContent>
                                 <form onSubmit={handleSubmit} className="space-y-6">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-4">
                                         {/* Name */}
                                         <div>
                                             <Label htmlFor="name">Full Name</Label>
@@ -120,43 +133,10 @@ export default function Profile() {
                                             {errors.email && (
                                                 <p className="text-red-500 text-sm mt-1">{errors.email}</p>
                                             )}
+                                            <p className="text-sm text-gray-500 mt-1">
+                                                Update your personal information here
+                                            </p>
                                         </div>
-
-                                        {/* Phone */}
-                                        <div>
-                                            <Label htmlFor="phone">Phone Number</Label>
-                                            <Input
-                                                id="phone"
-                                                type="tel"
-                                                value={data.phone}
-                                                onChange={(e) => setData({ ...data, phone: e.target.value })}
-                                                placeholder="Enter your phone number"
-                                            />
-                                        </div>
-
-                                        {/* Company */}
-                                        <div>
-                                            <Label htmlFor="company">Company</Label>
-                                            <Input
-                                                id="company"
-                                                type="text"
-                                                value={data.company}
-                                                onChange={(e) => setData({ ...data, company: e.target.value })}
-                                                placeholder="Enter your company name"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Address */}
-                                    <div>
-                                        <Label htmlFor="address">Address</Label>
-                                        <Input
-                                            id="address"
-                                            type="text"
-                                            value={data.address}
-                                            onChange={(e) => setData({ ...data, address: e.target.value })}
-                                            placeholder="Enter your address"
-                                        />
                                     </div>
 
                                     <div className="flex items-center gap-4">
@@ -193,15 +173,17 @@ export default function Profile() {
                                         <Calendar className="w-4 h-4 text-gray-500" />
                                         <span>Account Created</span>
                                     </div>
-                                    <span className="text-sm text-gray-500">January 15, 2024</span>
+                                    <span className="text-sm text-gray-500">
+                                        {new Date(user.created_at).toLocaleDateString()}
+                                    </span>
                                 </div>
 
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <User className="w-4 h-4 text-gray-500" />
-                                        <span>Account Type</span>
+                                        <span>Account Role</span>
                                     </div>
-                                    <Badge variant="secondary">Admin</Badge>
+                                    <Badge variant="secondary">{user.role || 'User'}</Badge>
                                 </div>
                             </CardContent>
                         </Card>
@@ -230,6 +212,7 @@ export default function Profile() {
                                 </div>
                             </CardContent>
                         </Card>
+                        </div>
                     </div>
                 </div>
             </div>

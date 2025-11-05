@@ -226,6 +226,9 @@ class BankReportController extends Controller
         $year = $validated['year'];
         $month = $validated['month'];
 
+        // Get tenant information
+        $tenant = \App\Models\Tenant::find($tenantId);
+
         $bankAccount = Account::getBankAccount($tenantId);
         $accountName = $bankAccount ? $bankAccount->name : 'Main Bank Account';
 
@@ -243,7 +246,7 @@ class BankReportController extends Controller
 
         $data = [
             'account_name' => $accountName,
-            'company_name' => 'Shop Management System',
+            'tenant' => $tenant,
             'year' => $year,
             'month_name' => $months[$month],
             'daily_transactions' => $daily_transactions,
