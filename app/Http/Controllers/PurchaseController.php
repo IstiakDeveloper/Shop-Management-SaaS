@@ -340,18 +340,16 @@ class PurchaseController extends Controller
                     );
                 } else {
                     // Paid less (refund)
-                    BankTransaction::create([
-                        'tenant_id' => Auth::user()->tenant_id,
-                        'type' => 'credit',
-                        'category' => 'adjustment',
-                        'amount' => abs($paidDifference),
-                        'balance_after' => 0, // Will be recalculated
-                        'transaction_date' => $validated['purchase_date'],
-                        'description' => "Refund for purchase update #{$purchase->invoice_number}",
-                        'reference_id' => $purchase->id,
-                        'reference_type' => 'purchase',
-                        'created_by' => Auth::id(),
-                    ]);
+                    BankTransaction::createCredit(
+                        Auth::user()->tenant_id,
+                        abs($paidDifference),
+                        "Refund for purchase update #{$purchase->invoice_number}",
+                        'adjustment',
+                        $purchase->id,
+                        'purchase',
+                        $validated['purchase_date'],
+                        Auth::id()
+                    );
                 }
             }
 

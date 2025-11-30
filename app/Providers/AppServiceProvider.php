@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Models\Product;
 use App\Policies\ProductPolicy;
+use App\Models\Sale;
+use App\Policies\SalePolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,5 +26,6 @@ class AppServiceProvider extends ServiceProvider
     {
         // Register policies explicitly
         Gate::policy(Product::class, ProductPolicy::class);
+        Gate::policy(Sale::class, SalePolicy::class);
     }
 }

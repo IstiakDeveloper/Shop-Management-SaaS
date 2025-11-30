@@ -6,6 +6,10 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\StockEntry;
+use App\Models\StockSummary;
+use App\Models\BankTransaction;
+use App\Models\Account;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -183,15 +187,156 @@ class SaleController extends Controller
         ]);
     }    public function edit(Sale $sale): Response|RedirectResponse
     {
-        // Completed sales cannot be edited (stock and bank already processed)
-        return redirect()->route('sales.show', $sale)
-            ->with('error', 'Sales cannot be edited once completed. Create a new sale instead.');
+        $this->authorize('update', $sale);
+
+        // Load necessary relationships
+        $sale->load('saleItems.product');
+
+        $customers = Customer::where('tenant_id', Auth::user()->tenant_id)
+            ->active()
+            ->orderBy('name')
+            ->get();
+
+        $products = Product::where('tenant_id', Auth::user()->tenant_id)
+            ->where('is_active', true)
+            ->with('stockSummary')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($product) {
+                $product->current_stock = $product->stockSummary ? $product->stockSummary->total_qty : 0;
+                return $product;
+            });
+
+        return Inertia::render('Sales/Edit', [
+            'sale' => $sale,
+            'customers' => $customers,
+            'products' => $products,
+        ]);
     }
 
     public function update(Request $request, Sale $sale): RedirectResponse
     {
-        // Completed sales cannot be updated (stock and bank already processed)
-        return back()->withErrors(['error' => 'Sales cannot be updated once completed. Create a new sale instead.']);
+        $this->authorize('update', $sale);
+
+        $validated = $request->validate([
+            'customer_id' => 'nullable|exists:customers,id',
+            'sale_date' => 'required|date',
+            'discount' => 'nullable|numeric|min:0',
+            'paid' => 'required|numeric|min:0',
+            'payment_method' => 'nullable|in:cash,card,mobile,bank',
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.unit_price' => 'required|numeric|min:0',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // === STEP 1: REVERSE OLD SALE'S STOCK ENTRIES ===
+            // Delete old stock entries and restore stock
+            $oldStockEntries = StockEntry::where('tenant_id', $sale->tenant_id)
+                ->where('reference_type', 'sale')
+                ->where('reference_id', $sale->id)
+                ->get();
+
+            foreach ($oldStockEntries as $entry) {
+                // Reverse stock: since sale deducted stock with negative qty,
+                // we add it back by reversing the negative
+                StockSummary::updateStock(
+                    $entry->tenant_id,
+                    $entry->product_id,
+                    -1 * $entry->quantity // Reverse: if entry was -10, we add +10 back
+                );
+
+                // Delete the old stock entry
+                $entry->delete();
+            }
+
+            // === STEP 2: REVERSE OLD SALE'S BANK TRANSACTION ===
+            // Delete old bank transactions and restore bank balance
+            $oldBankTransactions = BankTransaction::where('tenant_id', $sale->tenant_id)
+                ->where('reference_type', 'sale')
+                ->where('reference_id', $sale->id)
+                ->get();
+
+            foreach ($oldBankTransactions as $transaction) {
+                $bankAccount = Account::getBankAccount($sale->tenant_id);
+
+                if ($bankAccount) {
+                    // Reverse the transaction: if it was credit (money in), we debit (take money out)
+                    if ($transaction->type === 'credit') {
+                        $bankAccount->debit($transaction->amount);
+                    } else {
+                        $bankAccount->credit($transaction->amount);
+                    }
+                }
+
+                // Delete the old bank transaction
+                $transaction->delete();
+            }
+
+            // === STEP 3: REVERSE OLD CUSTOMER DUE ===
+            // If old sale had customer and due, subtract that due from customer
+            if ($sale->customer_id && $sale->due > 0) {
+                $oldCustomer = Customer::find($sale->customer_id);
+                if ($oldCustomer) {
+                    $oldCustomer->current_due = max(0, $oldCustomer->current_due - $sale->due);
+                    $oldCustomer->save();
+                }
+            }
+
+            // === STEP 4: DELETE OLD SALE ITEMS ===
+            SaleItem::where('sale_id', $sale->id)->delete();
+
+            // === STEP 5: CALCULATE NEW TOTALS ===
+            $subtotal = 0;
+            foreach ($validated['items'] as $item) {
+                $subtotal += $item['quantity'] * $item['unit_price'];
+            }
+
+            $total = $subtotal - ($validated['discount'] ?? 0);
+            $paid = $validated['paid'];
+            $due = $total - $paid;
+
+            // === STEP 6: UPDATE SALE WITH NEW DATA ===
+            $sale->update([
+                'customer_id' => $validated['customer_id'],
+                'sale_date' => $validated['sale_date'],
+                'subtotal' => $subtotal,
+                'discount' => $validated['discount'] ?? 0,
+                'discount_type' => 'fixed',
+                'total' => $total,
+                'paid' => $paid,
+                'due' => $due,
+                'payment_method' => $validated['payment_method'] ?? 'cash',
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+            // === STEP 7: CREATE NEW SALE ITEMS ===
+            foreach ($validated['items'] as $item) {
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                ]);
+            }
+
+            // === STEP 8: PROCESS NEW STOCK AND BANK TRANSACTION ===
+            $sale->load('saleItems');
+            $sale->processStockAndBankTransaction();
+
+            DB::commit();
+
+            return redirect()->route('sales.show', $sale)
+                ->with('success', 'Sale updated successfully. Stock and bank account recalculated.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withErrors(['error' => 'Failed to update sale: ' . $e->getMessage()]);
+        }
     }
 
     public function destroy(Sale $sale): RedirectResponse

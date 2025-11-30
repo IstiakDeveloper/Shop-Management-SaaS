@@ -309,22 +309,22 @@ const SalesIndex: React.FC<Props> = ({ sales, filters }) => {
                                                     <Eye className="w-4 h-4" />
                                                 </Link>
                                                 {sale.status === 'pending' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => completeSale(sale.id)}
-                                                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                                                            title="Complete"
-                                                        >
-                                                            <CheckCircle className="w-4 h-4" />
-                                                        </button>
-                                                        <Link
-                                                            href={`/sales/${sale.id}/edit`}
-                                                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </Link>
-                                                    </>
+                                                    <button
+                                                        onClick={() => completeSale(sale.id)}
+                                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                                                        title="Complete"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {(sale.status === 'pending' || sale.status === 'completed') && (
+                                                    <Link
+                                                        href={`/sales/${sale.id}/edit`}
+                                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                                        title="Edit"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </Link>
                                                 )}
                                                 {getPaymentStatus(sale.paid, sale.total) !== 'paid' && sale.status === 'completed' && (
                                                     <button

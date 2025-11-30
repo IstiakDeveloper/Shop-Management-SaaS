@@ -82,7 +82,7 @@ class IncomeExpenditureController extends Controller
         // 3. OTHER INCOME - Break down by category from bank transactions
         $otherIncomeCategories = BankTransaction::where('tenant_id', $tenantId)
             ->where('type', 'credit')
-            ->whereNotIn('category', ['sale', 'customer_payment', 'profit', 'fund_in', 'fund_out', 'fixed_asset'])
+            ->whereNotIn('category', ['sale', 'customer_payment', 'profit', 'fund_in', 'fund_out', 'fixed_asset', 'adjustment'])
             ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->select('category', DB::raw('SUM(amount) as total'), DB::raw('MAX(description) as description'))
             ->groupBy('category')
@@ -113,7 +113,7 @@ class IncomeExpenditureController extends Controller
         // Get all expense categories from bank transactions - break down by category
         $expenseCategories = BankTransaction::where('tenant_id', $tenantId)
             ->where('type', 'debit')
-            ->whereNotIn('category', ['profit', 'fund_in', 'fund_out', 'fixed_asset', 'purchase', 'vendor_payment'])
+            ->whereNotIn('category', ['profit', 'fund_in', 'fund_out', 'fixed_asset', 'purchase', 'vendor_payment', 'adjustment'])
             ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->select('category', DB::raw('SUM(amount) as total'), DB::raw('MAX(description) as description'))
             ->groupBy('category')
