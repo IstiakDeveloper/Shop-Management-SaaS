@@ -375,16 +375,46 @@ class ProductReportController extends Controller
                 // Calculate accurate available stock: Before + Purchase - Sale
                 $calculatedAvailableStock = $beforeStock + $purchaseQty - $totalSoldQty;
 
+                // Calculate profit per unit
+                $profitPerUnit = $totalSoldQty > 0 ? $totalProfit / $totalSoldQty : 0;
+
                 return [
                     'name' => $product->name,
+                    'code' => $product->code,
                     'category' => $product->category ? $product->category->name : 'N/A',
+
+                    // Before Stock Information
+                    'before_stock_qty' => $beforeStock,
+                    'before_stock_price' => $beforeStockPrice,
+                    'before_stock_value' => $beforeStockValue,
+
+                    // Purchase Information
+                    'purchase_qty' => $purchaseQty,
+                    'purchase_price' => $purchaseQty > 0 ? $purchaseTotal / $purchaseQty : 0,
+                    'purchase_total' => $purchaseTotal,
+
+                    // Sale Information
+                    'sale_qty' => $totalSoldQty,
+                    'sale_price' => $avgSalePrice,
+                    'sale_subtotal' => $saleSubtotal,
+                    'sale_discount' => $saleDiscount,
+                    'sale_total' => $totalSaleValue,
+
+                    // Profit Information
+                    'profit_per_unit' => $profitPerUnit,
+                    'profit_total' => $totalProfit,
+                    'profit_margin' => $profitMargin,
+
+                    // Available Stock Information
+                    'available_stock' => $calculatedAvailableStock,
+                    'available_stock_value' => $availableStockValue,
+
+                    // Legacy fields (for backward compatibility)
                     'current_stock' => $calculatedAvailableStock,
                     'avg_purchase_price' => $avgPurchasePrice,
                     'stock_value' => $availableStockValue,
                     'total_sold' => $totalSoldQty,
                     'avg_sale_price' => $avgSalePrice,
-                    'sale_subtotal' => $saleSubtotal,
-                    'sale_discount' => $saleDiscount,
                     'total_sale_amount' => $totalSaleValue,
                     'total_cost' => $totalCost,
                     'profit' => $totalProfit,

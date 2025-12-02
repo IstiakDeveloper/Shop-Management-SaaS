@@ -125,6 +125,10 @@
                         <td class="amount">{{ number_format($receipts['other_income'], 2) }}</td>
                     </tr>
                     <tr>
+                        <td>Adjustment/Refund</td>
+                        <td class="amount">{{ number_format($receipts['adjustment_refund'], 2) }}</td>
+                    </tr>
+                    <tr>
                         <td>Fund Receive</td>
                         <td class="amount">{{ number_format($receipts['fund_receive'], 2) }}</td>
                     </tr>

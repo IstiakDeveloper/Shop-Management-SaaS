@@ -52,8 +52,8 @@
             text-align: center;
         }
         th {
-            background-color: #000;
-            color: #fff;
+            background-color: #e5e7eb;
+            color: #000;
             font-weight: bold;
             font-size: 7px;
         }
@@ -85,7 +85,7 @@
         }
         .summary-item {
             display: table-cell;
-            width: 25%;
+            width: 20%;
             text-align: center;
             padding: 4px;
         }
@@ -124,33 +124,114 @@
     <table>
         <thead>
             <tr>
-                <th class="product-name">Product</th>
-                <th style="width: 8%;">Category</th>
-                <th style="width: 7%;">Stock</th>
-                <th style="width: 9%;">Avg Buy</th>
-                <th style="width: 7%;">Sold</th>
-                <th style="width: 9%;">Avg Sale</th>
-                <th style="width: 10%;">Sale Amt</th>
-                <th style="width: 10%;">Cost</th>
-                <th style="width: 10%;">Profit</th>
-                <th style="width: 7%;">Margin</th>
+                <th rowspan="2" style="width: 3%;">SL</th>
+                <th rowspan="2" class="product-name" style="width: 12%;">NAME</th>
+                <th colspan="3" style="border-left: 2px solid #000;">BEFORE STOCK INFORMATION</th>
+                <th colspan="3" style="border-left: 2px solid #000;">BUY INFORMATION</th>
+                <th colspan="5" style="border-left: 2px solid #000;">SALE INFORMATION</th>
+                <th colspan="2" style="border-left: 2px solid #000;">PROFIT INFORMATION</th>
+                <th colspan="2" style="border-left: 2px solid #000;">AVAILABLE INFORMATION</th>
+            </tr>
+            <tr>
+                <th style="border-left: 2px solid #000;">QTY</th>
+                <th>PRICE</th>
+                <th>VALUE</th>
+                <th style="border-left: 2px solid #000;">QTY</th>
+                <th>PRICE</th>
+                <th>TOTAL</th>
+                <th style="border-left: 2px solid #000;">QTY</th>
+                <th>PRICE</th>
+                <th>SUBTOTAL</th>
+                <th>DISCOUNT</th>
+                <th>TOTAL</th>
+                <th style="border-left: 2px solid #000;">PER UNIT</th>
+                <th>TOTAL</th>
+                <th style="border-left: 2px solid #000;">STOCK</th>
+                <th>VALUE</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($products as $product)
+            @php
+                $totalBeforeQty = 0;
+                $totalBeforeValue = 0;
+                $totalPurchaseQty = 0;
+                $totalPurchaseValue = 0;
+                $totalSaleQty = 0;
+                $totalSaleSubtotal = 0;
+                $totalSaleDiscount = 0;
+                $totalSaleTotal = 0;
+                $totalProfit = 0;
+                $totalAvailableQty = 0;
+                $totalAvailableValue = 0;
+            @endphp
+            @foreach($products as $index => $product)
+            @php
+                $beforeQty = $product['before_stock_qty'] ?? 0;
+                $beforePrice = $product['before_stock_price'] ?? 0;
+                $beforeValue = $product['before_stock_value'] ?? 0;
+                $purchaseQty = $product['purchase_qty'] ?? 0;
+                $purchasePrice = $product['purchase_price'] ?? 0;
+                $purchaseTotal = $product['purchase_total'] ?? 0;
+                $saleQty = $product['sale_qty'] ?? 0;
+                $salePrice = $product['sale_price'] ?? 0;
+                $saleSubtotal = $product['sale_subtotal'] ?? 0;
+                $saleDiscount = $product['sale_discount'] ?? 0;
+                $saleTotal = $product['sale_total'] ?? 0;
+                $profitPerUnit = $product['profit_per_unit'] ?? 0;
+                $profitTotal = $product['profit_total'] ?? 0;
+                $availableStock = $product['available_stock'] ?? 0;
+                $availableValue = $product['available_stock_value'] ?? 0;
+
+                $totalBeforeQty += $beforeQty;
+                $totalBeforeValue += $beforeValue;
+                $totalPurchaseQty += $purchaseQty;
+                $totalPurchaseValue += $purchaseTotal;
+                $totalSaleQty += $saleQty;
+                $totalSaleSubtotal += $saleSubtotal;
+                $totalSaleDiscount += $saleDiscount;
+                $totalSaleTotal += $saleTotal;
+                $totalProfit += $profitTotal;
+                $totalAvailableQty += $availableStock;
+                $totalAvailableValue += $availableValue;
+            @endphp
             <tr>
+                <td>{{ $index + 1 }}</td>
                 <td class="product-name">{{ $product['name'] }}</td>
-                <td>{{ $product['category'] ?? 'N/A' }}</td>
-                <td class="number-cell">{{ number_format($product['current_stock'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['avg_purchase_price'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['total_sold'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['avg_sale_price'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['total_sale_amount'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['total_cost'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['profit'] ?? 0, 0) }}</td>
-                <td class="number-cell">{{ number_format($product['margin_percentage'] ?? 0, 1) }}%</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($beforeQty, 0) }}</td>
+                <td class="number-cell">{{ number_format($beforePrice, 2) }}</td>
+                <td class="number-cell">{{ number_format($beforeValue, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($purchaseQty, 0) }}</td>
+                <td class="number-cell">{{ number_format($purchasePrice, 2) }}</td>
+                <td class="number-cell">{{ number_format($purchaseTotal, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($saleQty, 0) }}</td>
+                <td class="number-cell">{{ number_format($salePrice, 2) }}</td>
+                <td class="number-cell">{{ number_format($saleSubtotal, 2) }}</td>
+                <td class="number-cell">{{ number_format($saleDiscount, 2) }}</td>
+                <td class="number-cell">{{ number_format($saleTotal, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($profitPerUnit, 2) }}</td>
+                <td class="number-cell">{{ number_format($profitTotal, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($availableStock, 0) }}</td>
+                <td class="number-cell">{{ number_format($availableValue, 2) }}</td>
             </tr>
             @endforeach
+            <tr style="background-color: #d1d5db; font-weight: bold; border-top: 2px solid #000;">
+                <td colspan="2">TOTAL</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($totalBeforeQty, 0) }}</td>
+                <td class="number-cell">-</td>
+                <td class="number-cell">{{ number_format($totalBeforeValue, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($totalPurchaseQty, 0) }}</td>
+                <td class="number-cell">-</td>
+                <td class="number-cell">{{ number_format($totalPurchaseValue, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($totalSaleQty, 0) }}</td>
+                <td class="number-cell">-</td>
+                <td class="number-cell">{{ number_format($totalSaleSubtotal, 2) }}</td>
+                <td class="number-cell">{{ number_format($totalSaleDiscount, 2) }}</td>
+                <td class="number-cell">{{ number_format($totalSaleTotal, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">-</td>
+                <td class="number-cell">{{ number_format($totalProfit, 2) }}</td>
+                <td class="number-cell" style="border-left: 2px solid #000;">{{ number_format($totalAvailableQty, 0) }}</td>
+                <td class="number-cell">{{ number_format($totalAvailableValue, 2) }}</td>
+            </tr>
         </tbody>
     </table>
 
@@ -162,16 +243,20 @@
                 <div class="summary-value">{{ count($products) }}</div>
             </div>
             <div class="summary-item">
-                <div class="summary-label">Total Sale</div>
-                <div class="summary-value">{{ number_format(collect($products)->sum('total_sale_amount'), 0) }}</div>
+                <div class="summary-label">Total Purchase</div>
+                <div class="summary-value">{{ number_format(collect($products)->sum('purchase_total'), 0) }}</div>
             </div>
             <div class="summary-item">
-                <div class="summary-label">Total Cost</div>
-                <div class="summary-value">{{ number_format(collect($products)->sum('total_cost'), 0) }}</div>
+                <div class="summary-label">Total Sale</div>
+                <div class="summary-value">{{ number_format(collect($products)->sum('sale_total'), 0) }}</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">Total Profit</div>
-                <div class="summary-value">{{ number_format(collect($products)->sum('profit'), 0) }}</div>
+                <div class="summary-value">{{ number_format(collect($products)->sum('profit_total'), 0) }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Stock Value</div>
+                <div class="summary-value">{{ number_format(collect($products)->sum('available_stock_value'), 0) }}</div>
             </div>
         </div>
     </div>

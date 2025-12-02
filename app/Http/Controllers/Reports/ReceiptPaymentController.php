@@ -74,7 +74,14 @@ class ReceiptPaymentController extends Controller
         // Other Income (credit transactions excluding sale, customer_payment, opening)
         $otherIncome = BankTransaction::where('tenant_id', $tenantId)
             ->where('type', 'credit')
-            ->whereIn('category', ['other', 'adjustment'])
+            ->whereIn('category', ['others_income', 'profit', 'fund_in', 'other'])
+            ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->sum('amount');
+
+        // Adjustment/Refund (credit adjustments from purchase/sale updates)
+        $adjustmentRefund = BankTransaction::where('tenant_id', $tenantId)
+            ->where('type', 'credit')
+            ->where('category', 'adjustment')
             ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->sum('amount');
 
@@ -85,13 +92,14 @@ class ReceiptPaymentController extends Controller
             ->whereBetween('transaction_date', [$startDate->toDateString(), $endDate->toDateString()])
             ->sum('amount');
 
-        $totalReceipts = $openingCash + $saleCollection + $customerPayments + $otherIncome + $fundReceive;
+        $totalReceipts = $openingCash + $saleCollection + $customerPayments + $otherIncome + $adjustmentRefund + $fundReceive;
 
         return [
             'opening_cash' => (float)$openingCash,
             'sale_collection' => (float)$saleCollection,
             'customer_payments' => (float)$customerPayments,
             'other_income' => (float)$otherIncome,
+            'adjustment_refund' => (float)$adjustmentRefund,
             'fund_receive' => (float)$fundReceive,
             'total' => (float)$totalReceipts,
         ];

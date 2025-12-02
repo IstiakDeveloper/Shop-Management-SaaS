@@ -13,6 +13,7 @@ interface Receipts {
     sale_collection: number;
     customer_payments: number;
     other_income: number;
+    adjustment_refund: number;
     fund_receive: number;
     total: number;
 }
@@ -246,6 +247,12 @@ export default function ReceiptPayment({ receipts, payments, start_date, end_dat
                                         <td className="px-4 py-3">Other Income</td>
                                         <td className="px-4 py-3 text-right text-green-600 font-semibold">
                                             {formatCurrency(receipts.other_income)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <td className="px-4 py-3">Adjustment/Refund</td>
+                                        <td className="px-4 py-3 text-right text-green-600 font-semibold">
+                                            {formatCurrency(receipts.adjustment_refund)}
                                         </td>
                                     </tr>
                                     <tr className="border-b">
